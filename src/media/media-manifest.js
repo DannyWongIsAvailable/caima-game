@@ -1,5 +1,5 @@
 /**
- * 媒体资源统一配置。导航图标和首页人物默认启用，其余可选资源默认关闭。
+ * 媒体资源统一配置。导航图标、首页人物和对战手势默认启用，其余可选资源默认关闭。
  * 以后：把素材放到 assets 对应目录，修改 src 和 enabled 即可。
  * 图片背景/手势通过 ImageLoader 自动加载；音频通过 AudioManager 自动播放。
  * revealStrip 可使用一行 8 帧的 PNG 透明序列图（宽度需能被 8 整除）。
@@ -13,12 +13,12 @@ module.exports = {
     // 首页人物由用户提供，原始图片 509×571；渲染时等比缩放。
     homeMan: { src: 'assets/images/man.png', enabled: true },
     background: { src: 'assets/images/background.jpg', enabled: false },
-    hand0: { src: 'assets/images/hand-0.png', enabled: false },
-    hand1: { src: 'assets/images/hand-1.png', enabled: false },
-    hand2: { src: 'assets/images/hand-2.png', enabled: false },
-    hand3: { src: 'assets/images/hand-3.png', enabled: false },
-    hand4: { src: 'assets/images/hand-4.png', enabled: false },
-    hand5: { src: 'assets/images/hand-5.png', enabled: false },
+    hand0: { src: 'assets/images/hand/hand-0.png', enabled: true },
+    hand1: { src: 'assets/images/hand/hand-1.png', enabled: true },
+    hand2: { src: 'assets/images/hand/hand-2.png', enabled: true },
+    hand3: { src: 'assets/images/hand/hand-3.png', enabled: true },
+    hand4: { src: 'assets/images/hand/hand-4.png', enabled: true },
+    hand5: { src: 'assets/images/hand/hand-5.png', enabled: true },
     revealStrip: { src: 'assets/animations/reveal-strip.png', enabled: false, frames: 8 }
   },
   audio: {

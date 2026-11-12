@@ -247,10 +247,12 @@ class CanvasRenderer {
     UI.label(ctx, '电脑喊码', L.call.x, L.call.labelY, {
       size: F.miniLabel, color: C.secondaryText, align: 'center'
     });
-    // 电脑喊码不渐隐，不等待手势动画结束；本轮选完喊码立即显示新数字。
-    UI.label(ctx, result ? result.ai.call : '?', L.call.x, L.call.numberY, {
-      size: F.aiCall, color: C.aiCallText || C.accent, bold: true, align: 'center'
-    });
+    // 首次进入时无结果，喊码区域保持空白；开码后立即显示新数字。
+    if (result) {
+      UI.label(ctx, result.ai.call, L.call.x, L.call.numberY, {
+        size: F.aiCall, color: C.aiCallText || C.accent, bold: true, align: 'center'
+      });
+    }
   }
 
   drawGameText(ctx, model) {
