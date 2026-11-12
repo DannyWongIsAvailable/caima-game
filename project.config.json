@@ -1,0 +1,11 @@
+{
+  "description": "广西猜码 PVE - Canvas 2D 最小可玩版",
+  "projectname": "guangxi-caima",
+  "compileType": "game",
+  "appid": "touristappid",
+  "setting": {
+    "es6": true,
+    "minified": false,
+    "urlCheck": false
+  }
+}
