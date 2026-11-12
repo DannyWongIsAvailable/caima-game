@@ -43,7 +43,7 @@ function button(ctx, value, x, y, width, height, options) {
   });
 }
 
-/** 导航与设置图标按钮：背景统一跟随当前皮肤，素材加载前使用简洁符号占位。 */
+/** 导航与首页入口图标按钮：背景统一跟随当前皮肤，素材加载前使用简洁符号占位。 */
 function iconButton(ctx, name, image, x, y, width, height, options) {
   const o = options || {};
   const nav = !!o.nav;
@@ -59,7 +59,7 @@ function iconButton(ctx, name, image, x, y, width, height, options) {
     ctx.drawImage(image, ix, iy, size, size);
     return;
   }
-  const fallback = { settings: '⚙', back: '←', home: '⌂' }[name] || '•';
+  const fallback = { rules: '?', settings: '⚙', back: '←', home: '⌂' }[name] || '•';
   label(ctx, fallback, x + width / 2, y + height / 2, {
     size: size, bold: true, color: theme.colors.buttonText || theme.colors.primaryText, align: 'center'
   });

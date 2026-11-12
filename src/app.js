@@ -19,6 +19,7 @@ class MiniGameApp {
     this.model = new GameModel(opts.randomFn);
     this.skinManager = new SkinManager(wxApi);
     this.uiPage = 'home';
+    this.rulesPage = 0;
     this.images = new ImageLoader(wxApi, () => this.render());
     this.audio = new AudioManager(wxApi);
     this.animator = new RevealAnimator(this.canvas);
@@ -62,7 +63,7 @@ class MiniGameApp {
 
   render() {
     this.renderer.render(this.model, this.revealProgress, this.animating,
-      this.previousAiFist, this.uiPage, this.skinManager.id, this.homeIntro);
+      this.previousAiFist, this.uiPage, this.skinManager.id, this.homeIntro, this.rulesPage);
   }
 
   dispatch(action) {
@@ -84,6 +85,29 @@ class MiniGameApp {
     }
     if (this.animating) return;
     switch (action.type) {
+      case 'OPEN_RULES':
+        if (this.model.phase !== 'home' || this.uiPage !== 'home') return;
+        this.rulesPage = 0;
+        this.uiPage = 'rules';
+        this.stopHomeIntro(true);
+        this.audio.play('tap');
+        break;
+      case 'CLOSE_RULES':
+        if (this.model.phase !== 'home' || this.uiPage !== 'rules') return;
+        this.uiPage = 'home';
+        this.rulesPage = 0;
+        this.audio.play('tap');
+        break;
+      case 'RULES_PREV':
+        if (this.model.phase !== 'home' || this.uiPage !== 'rules') return;
+        this.rulesPage = Math.max(0, this.rulesPage - 1);
+        this.audio.play('tap');
+        break;
+      case 'RULES_NEXT':
+        if (this.model.phase !== 'home' || this.uiPage !== 'rules') return;
+        this.rulesPage += 1;
+        this.audio.play('tap');
+        break;
       case 'OPEN_SETTINGS':
         if (this.model.phase !== 'home' || this.uiPage !== 'home') return;
         this.uiPage = 'settings';

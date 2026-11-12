@@ -74,15 +74,17 @@ const theme = {
     // 人物从右侧探出；以原图 509:571 的宽高比自动计算显示高度。
     character: { x: 194, y: 276, width: 181, exitX: 390 },
     bubble: { x: 37, y: 331, width: 151, height: 55 },
-    start: { x: 42, y: 485, width: 291, height: 62 },
-    settings: { x: 159.5, y: 561, width: 56, height: 56 },
+    start: { x: 72.5, y: 485, width: 230, height: 62 },
+    // 首页玩法说明位于右上角，设置入口保留在右下角。
+    rules: { x: 16, y: 32, width: 54, height: 54 },
+    settings: { x: 305, y: 625, width: 54, height: 54 },
     skinEntry: { x: 42, y: 335, width: 291, height: 62 }
   },
   // 统一导航图标按钮与图标本身尺寸（画布设计坐标）。
   iconLayout: {
     back: { x: 18, y: 16, width: 44, height: 44 },
     home: { x: 12, y: 15, width: 44, height: 44 },
-    size: { settings: 37, back: 29, home: 29 }
+    size: { rules: 37, settings: 37, back: 29, home: 29 }
   },
   // 皮肤选择页：375 × 720 设计空间内最多展示六套皮肤，不需要滚动。
   skinLayout: {
