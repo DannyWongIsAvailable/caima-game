@@ -4,6 +4,7 @@ const { drawImageCover, roundedRect } = require('./draw-utils');
 const { SKINS } = require('../theme/skins');
 const UI = require('./ui-components');
 const { drawHand } = require('./ai-hand');
+const drawPagedDialog = require('./paged-dialog');
 
 const C = theme.colors;
 const F = theme.typography;
@@ -23,7 +24,7 @@ class CanvasRenderer {
     this.hitAreas = [];
   }
 
-  render(model, revealProgress, isAnimating, previousAiFist, viewPage, skinId, homeIntro, rulesPage) {
+  render(model, revealProgress, isAnimating, previousAiFist, viewPage, skinId, homeIntro, dialog) {
     this.hitAreas = [];
     const ctx = this.ctx;
     ctx.save();
@@ -34,15 +35,21 @@ class CanvasRenderer {
     if (model.phase === 'home') {
       if (viewPage === 'skins') this.drawSkins(ctx, skinId);
       else if (viewPage === 'settings') this.drawSettings(ctx);
-      else {
-        this.drawHome(ctx, homeIntro);
-        if (viewPage === 'rules') {
-          // 弹窗独占触摸，禁止穿透到底下的开始游戏、玩法和设置按钮。
-          this.hitAreas = [];
-          this.drawRulesDialog(ctx, rulesPage);
-        }
-      }
+      else this.drawHome(ctx, homeIntro);
     } else this.drawGame(ctx, model, revealProgress, isAnimating, previousAiFist);
+    if (dialog) {
+      // 清除底层点击区：两个弹窗都只响应关闭与翻页，不会误触游戏按钮。
+      this.hitAreas = [];
+      if (dialog.type === 'rules' && model.phase === 'home') {
+        drawPagedDialog(ctx, {
+          title: '玩法说明', content: CONFIG.RULES_TEXT, requestedPage: dialog.page
+        }, (x, y, width, height, action) => this.addHitArea(x, y, width, height, action));
+      } else if (dialog.type === 'history' && model.phase !== 'home') {
+        drawPagedDialog(ctx, {
+          title: '本局出码记录', content: this.formatHistory(model.history), requestedPage: dialog.page
+        }, (x, y, width, height, action) => this.addHitArea(x, y, width, height, action));
+      }
+    }
     ctx.restore();
     ctx.restore();
   }
@@ -94,120 +101,49 @@ class CanvasRenderer {
 
     const start = home.start;
     this.drawActionButton(ctx, '开始游戏', start.x, start.y, start.width, start.height,
-        { type: 'START' });
+      { type: 'START' });
     const rules = home.rules;
     this.drawIconButton(ctx, 'rules', rules.x, rules.y, rules.width,
-        rules.height, { type: 'OPEN_RULES' });
+      rules.height, { type: 'OPEN_RULES' });
     const settings = home.settings;
     this.drawIconButton(ctx, 'settings', settings.x, settings.y, settings.width,
-        settings.height, { type: 'OPEN_SETTINGS' });
+      settings.height, { type: 'OPEN_SETTINGS' });
   }
 
-  /** 首页玩法弹窗：规则文案取自 game-config.js，自动换行并在过长时分页。 */
-  drawRulesDialog(ctx, requestedPage) {
-    const dialog = { x: 20, y: 105, width: 335, height: 520 };
-    const textX = 44;
-    const textY = 193;
-    const lineHeight = 22;
-    const linesPerPage = 16;
-
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.70)';
-    ctx.fillRect(0, 0, CONFIG.DESIGN_WIDTH, CONFIG.DESIGN_HEIGHT);
-    roundedRect(ctx, dialog.x, dialog.y, dialog.width, dialog.height, 20,
-        C.surface, C.border);
-    UI.label(ctx, '玩法说明', 187.5, 145, {
-      size: 25, bold: true, color: C.primaryText, align: 'center'
-    });
-    ctx.fillStyle = C.divider;
-    ctx.fillRect(42, 175, 291, 1);
-
-    // 与显示的字号保持一致，按真实 Canvas 字宽对中英文混排进行换行。
-    const fontSize = 15;
-    ctx.font = fontSize + 'px ' + F.family;
-    const lines = this.wrapRulesText(ctx, CONFIG.RULES_TEXT, dialog.width - 48);
-    const pageCount = Math.max(1, Math.ceil(lines.length / linesPerPage));
-    const page = Math.max(0, Math.min(pageCount - 1, requestedPage || 0));
-    lines.slice(page * linesPerPage, (page + 1) * linesPerPage).forEach((line, index) => {
-      UI.label(ctx, line, textX, textY + index * lineHeight, {
-        size: fontSize, color: C.primaryText
-      });
-    });
-
-    // 右上角 X 和底部关闭按钮始终可关闭；长内容额外展示翻页按钮。
-    const closeX = 309;
-    const closeY = 120;
-    ctx.beginPath();
-    ctx.strokeStyle = C.secondaryText;
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = 'round';
-    ctx.moveTo(closeX + 7, closeY + 7);
-    ctx.lineTo(closeX + 21, closeY + 21);
-    ctx.moveTo(closeX + 21, closeY + 7);
-    ctx.lineTo(closeX + 7, closeY + 21);
-    ctx.stroke();
-    this.addHitArea(closeX - 4, closeY - 4, 36, 36, { type: 'CLOSE_RULES' });
-
-    if (pageCount > 1) {
-      UI.label(ctx, (page + 1) + ' / ' + pageCount, 187.5, 553, {
-        size: F.note, color: C.secondaryText, align: 'center'
-      });
-      this.drawDialogButton(ctx, '上一页', 43, 571, 86, 40,
-          page > 0 ? { type: 'RULES_PREV' } : null);
-      this.drawDialogButton(ctx, '关闭', 144, 571, 87, 40, { type: 'CLOSE_RULES' });
-      this.drawDialogButton(ctx, '下一页', 246, 571, 86, 40,
-          page < pageCount - 1 ? { type: 'RULES_NEXT' } : null);
-    } else {
-      this.drawDialogButton(ctx, '知道了', 122, 571, 131, 40, { type: 'CLOSE_RULES' });
+  /** 将已结算记录格式化，供可复用弹窗按段分页。每段是一条完整的出码记录。 */
+  formatHistory(records) {
+    if (!records || records.length === 0) {
+      return '本局暂无出码记录。\n完成首次出拳和喊码后，将自动记录在这里。';
     }
-  }
-
-  wrapRulesText(ctx, content, maxWidth) {
-    const lines = [];
-    String(content || '').split(/\r?\n/).forEach((paragraph, index) => {
-      if (index > 0 && paragraph === '') {
-        lines.push('');
-        return;
-      }
-      let line = '';
-      Array.from(paragraph).forEach((char) => {
-        const candidate = line + char;
-        if (line && ctx.measureText(candidate).width > maxWidth) {
-          lines.push(line);
-          line = char;
-        } else {
-          line = candidate;
-        }
-      });
-      lines.push(line);
-    });
-    return lines;
-  }
-
-  drawDialogButton(ctx, label, x, y, width, height, action) {
-    roundedRect(ctx, x, y, width, height, 10,
-        action ? C.accent : C.disabledSurface);
-    UI.label(ctx, label, x + width / 2, y + height / 2, {
-      size: 16, bold: true,
-      color: action ? C.accentText : C.disabledText, align: 'center'
-    });
-    if (action) this.addHitArea(x, y, width, height, action);
+    return records.map((item) => {
+      let outcome = '不计分';
+      if (item.outcome === 'player') outcome = '你 +1 分';
+      else if (item.outcome === 'ai') outcome = '电脑 +1 分';
+      else if (item.playerHit && item.aiHit) outcome = '双方猜中，不计分';
+      return [
+        '第 ' + item.roundNumber + ' 码 · ' + outcome,
+        '你：出拳 ' + item.player.fist + ' / 喊码 ' + item.player.call,
+        '电脑：出拳 ' + item.ai.fist + ' / 喊码 ' + item.ai.call,
+        '出拳合计：' + item.total
+      ].join('\n');
+    }).join('\n\n');
   }
 
   /** 设置页面仅保留「更换皮肤」主入口和返回导航。 */
   drawSettings(ctx) {
     const back = theme.iconLayout.back;
     this.drawIconButton(ctx, 'back', back.x, back.y, back.width, back.height,
-        { type: 'CLOSE_SETTINGS' }, true);
+      { type: 'CLOSE_SETTINGS' }, true);
     const button = theme.homeLayout.skinEntry;
     this.drawActionButton(ctx, '更换皮肤', button.x, button.y,
-        button.width, button.height, { type: 'OPEN_SKINS' });
+      button.width, button.height, { type: 'OPEN_SKINS' });
   }
 
   /** 皮肤选择页：只更换视觉资源，不影响比分和出码规则。 */
   drawSkins(ctx, activeId) {
     const back = theme.iconLayout.back;
     this.drawIconButton(ctx, 'back', back.x, back.y, back.width, back.height,
-        { type: 'CLOSE_SKINS' }, true);
+      { type: 'CLOSE_SKINS' }, true);
     UI.label(ctx, '选择皮肤', 187.5, 66, {
       size: 28, color: C.primaryText, bold: true, align: 'center'
     });
@@ -221,8 +157,8 @@ class CanvasRenderer {
       const y = S.y + index * (S.rowHeight + S.rowGap);
       const selected = skin.id === activeId;
       roundedRect(ctx, x, y, S.width, S.rowHeight, 14,
-          selected ? C.surfaceRaised : C.surface,
-          selected ? C.accent : C.border);
+        selected ? C.surfaceRaised : C.surface,
+        selected ? C.accent : C.border);
       const thumbnail = this.images.get('skinPreview_' + skin.id);
       const py = y + (S.rowHeight - S.previewHeight) / 2;
       if (thumbnail) {
@@ -245,7 +181,7 @@ class CanvasRenderer {
         bold: selected, align: 'right'
       });
       this.addHitArea(x, y, S.width, S.rowHeight,
-          { type: 'SELECT_SKIN', id: skin.id });
+        { type: 'SELECT_SKIN', id: skin.id });
     });
     UI.label(ctx, '背景与按钮、文字配色将一起切换', 187.5, S.footerY, {
       size: F.note, color: C.secondaryText, align: 'center'
@@ -299,7 +235,7 @@ class CanvasRenderer {
     ctx.globalAlpha = progress;
     // 米白色气泡与所有六套皮肤保持足够对比度。
     roundedRect(ctx, x, y, width, height, 16,
-        'rgba(255, 249, 235, 0.97)', 'rgba(57, 43, 27, 0.20)');
+      'rgba(255, 249, 235, 0.97)', 'rgba(57, 43, 27, 0.20)');
     ctx.beginPath();
     ctx.moveTo(x + width - 16, y + height - 11);
     ctx.lineTo(x + width + 21, y + height + 5);
@@ -330,17 +266,24 @@ class CanvasRenderer {
       previousFist: previousAiFist
     });
     this.drawGameText(ctx, model);
+    // 复用首页 rule.png：对局中的右侧中部入口用于查看本局全部出码记录。
+    const history = L.history;
+    this.drawIconButton(ctx, 'rules', history.x, history.y, history.width, history.height,
+      { type: 'OPEN_HISTORY' });
+    UI.label(ctx, '出码记录', history.x + history.width / 2, history.labelY, {
+      size: F.note, color: C.secondaryText, align: 'center'
+    });
     if (model.phase === 'over') {
       const b = L.restart;
       this.drawActionButton(ctx, '再玩一局', b.x, b.y, b.width, b.height,
-          isAnimating ? null : { type: 'START' });
+        isAnimating ? null : { type: 'START' });
     } else {
       this.drawPickingControls(ctx, model);
     }
     // 顶部独立入口：动画/结算期间也始终能返回首页。
     const home = theme.iconLayout.home;
     this.drawIconButton(ctx, 'home', home.x, home.y, home.width, home.height,
-        { type: 'RETURN_HOME' }, true);
+      { type: 'RETURN_HOME' }, true);
   }
 
   drawAiArea(ctx, result, animation) {
@@ -359,10 +302,10 @@ class CanvasRenderer {
   drawGameText(ctx, model) {
     // 比分不再有背景卡片，始终只占一行小字。
     UI.label(ctx,
-        '你 ' + model.score.player + '  :  ' + model.score.ai + '  电脑     ·     第 ' + model.roundNumber + ' 码',
-        187.5, L.scoreY, {
-          size: F.compactScore, color: C.secondaryText, align: 'center'
-        });
+      '你 ' + model.score.player + '  :  ' + model.score.ai + '  电脑     ·     第 ' + model.roundNumber + ' 码',
+      187.5, L.scoreY, {
+        size: F.compactScore, color: C.secondaryText, align: 'center'
+      });
 
     const result = model.lastResult;
     if (!result || model.phase === 'picking') {
@@ -372,10 +315,10 @@ class CanvasRenderer {
       return;
     }
     UI.label(ctx,
-        '合计 ' + result.total + ' · 你出 ' + result.player.fist + ' / 喊 ' + result.player.call,
-        187.5, L.detailY, {
-          size: F.note, color: C.primaryText, align: 'center'
-        });
+      '合计 ' + result.total + ' · 你出 ' + result.player.fist + ' / 喊 ' + result.player.call,
+      187.5, L.detailY, {
+        size: F.note, color: C.primaryText, align: 'center'
+      });
 
     let text = '未分胜负 · 自动下一码';
     let color = C.secondaryText;
@@ -409,8 +352,8 @@ class CanvasRenderer {
     });
     for (let i = 0; i <= 5; i += 1) {
       this.drawPickButton(ctx, String(i), p.x + i * stride, p.fistButtonY,
-          size, theme.control.fistHeight, model.player.fist === i,
-          picking ? { type: 'FIST', value: i } : null, !picking);
+        size, theme.control.fistHeight, model.player.fist === i,
+        picking ? { type: 'FIST', value: i } : null, !picking);
     }
 
     UI.label(ctx, '你的喊码', p.labelX, p.callLabelY, {
@@ -421,8 +364,8 @@ class CanvasRenderer {
       const y = n < 6 ? p.callFirstY : p.callSecondY;
       const available = picking && fistSelected;
       this.drawPickButton(ctx, String(n), x, y, size, theme.control.callHeight,
-          model.player.call === n,
-          available ? { type: 'CALL', value: n } : null, !available);
+        model.player.call === n,
+        available ? { type: 'CALL', value: n } : null, !available);
     }
   }
 

@@ -19,7 +19,8 @@ class MiniGameApp {
     this.model = new GameModel(opts.randomFn);
     this.skinManager = new SkinManager(wxApi);
     this.uiPage = 'home';
-    this.rulesPage = 0;
+    // 统一弹窗状态：玩法说明和本局记录共享同一套分页/关闭交互。
+    this.dialog = null;
     this.images = new ImageLoader(wxApi, () => this.render());
     this.audio = new AudioManager(wxApi);
     this.animator = new RevealAnimator(this.canvas);
@@ -63,7 +64,7 @@ class MiniGameApp {
 
   render() {
     this.renderer.render(this.model, this.revealProgress, this.animating,
-      this.previousAiFist, this.uiPage, this.skinManager.id, this.homeIntro, this.rulesPage);
+      this.previousAiFist, this.uiPage, this.skinManager.id, this.homeIntro, this.dialog);
   }
 
   dispatch(action) {
@@ -77,35 +78,44 @@ class MiniGameApp {
       this.previousAiFist = null;
       this.revealProgress = 1;
       this.model.reset();
+      this.dialog = null;
       this.uiPage = 'home';
       this.audio.play('tap');
       this.startHomeIntro();
       this.render();
       return;
     }
-    if (this.animating) return;
+    // 弹窗开启时，只处理弹窗内的关闭/翻页，禁止操作底下的出拳、喊码或首页按钮。
+    if (this.dialog) {
+      switch (action.type) {
+        case 'CLOSE_DIALOG':
+          this.dialog = null;
+          break;
+        case 'DIALOG_PREV':
+          this.dialog.page = Math.max(0, this.dialog.page - 1);
+          break;
+        case 'DIALOG_NEXT':
+          this.dialog.page += 1;
+          break;
+        default:
+          return;
+      }
+      this.audio.play('tap');
+      this.render();
+      return;
+    }
+    // 出码动画可正常继续；记录弹窗也能在动画期间打开，不会中断本轮结算。
+    if (this.animating && action.type !== 'OPEN_HISTORY') return;
     switch (action.type) {
       case 'OPEN_RULES':
         if (this.model.phase !== 'home' || this.uiPage !== 'home') return;
-        this.rulesPage = 0;
-        this.uiPage = 'rules';
+        this.dialog = { type: 'rules', page: 0 };
         this.stopHomeIntro(true);
         this.audio.play('tap');
         break;
-      case 'CLOSE_RULES':
-        if (this.model.phase !== 'home' || this.uiPage !== 'rules') return;
-        this.uiPage = 'home';
-        this.rulesPage = 0;
-        this.audio.play('tap');
-        break;
-      case 'RULES_PREV':
-        if (this.model.phase !== 'home' || this.uiPage !== 'rules') return;
-        this.rulesPage = Math.max(0, this.rulesPage - 1);
-        this.audio.play('tap');
-        break;
-      case 'RULES_NEXT':
-        if (this.model.phase !== 'home' || this.uiPage !== 'rules') return;
-        this.rulesPage += 1;
+      case 'OPEN_HISTORY':
+        if (this.model.phase === 'home') return;
+        this.dialog = { type: 'history', page: 0 };
         this.audio.play('tap');
         break;
       case 'OPEN_SETTINGS':
@@ -141,6 +151,7 @@ class MiniGameApp {
         this.clearAutoNext();
         this.stopHomeIntro(true);
         this.model.start();
+        this.dialog = null;
         this.previousAiFist = null;
         this.revealProgress = 1;
         this.audio.play('tap');

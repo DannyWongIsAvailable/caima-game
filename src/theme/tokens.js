@@ -97,6 +97,8 @@ const theme = {
   gameLayout: {
     hand: { x: 26, y: -38, width: 250, height: 381, enterY: 390 },
     call: { x: 311, labelY: 150, numberY: 217 },
+    // 本局出码记录入口（复用 rule.png），位于对局页右侧中部。
+    history: { x: 305, y: 282, width: 54, height: 54, labelY: 350 },
     handCaption: { x: 145, y: 347 },
     scoreY: 374,
     detailY: 402,
