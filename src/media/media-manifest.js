@@ -11,6 +11,11 @@ module.exports = {
     iconRule: { src: 'assets/images/icons/rule.png', enabled: true },
     iconBack: { src: 'assets/images/icons/back.png', enabled: true },
     iconHome: { src: 'assets/images/icons/home.png', enabled: true },
+    // 设置页图标只负责视觉反馈；本版尚不接入真实音量控制。
+    iconSkin: { src: 'assets/images/icons/skin.png', enabled: true },
+    iconAudio: { src: 'assets/images/icons/audio.png', enabled: true },
+    iconNoAudio: { src: 'assets/images/icons/no-audio.png', enabled: true },
+    iconMute: { src: 'assets/images/icons/mute.png', enabled: true },
     // 首页人物由用户提供，原始图片 509×571；渲染时等比缩放。
     homeMan: { src: 'assets/images/man.png', enabled: true },
     background: { src: 'assets/images/background.jpg', enabled: false },

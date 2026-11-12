@@ -19,6 +19,11 @@ class MiniGameApp {
     this.model = new GameModel(opts.randomFn);
     this.skinManager = new SkinManager(wxApi);
     this.uiPage = 'home';
+    // 音量设置在当前 MVP 仅保存于内存，供设置页展示与交互，不控制 AudioManager。
+    this.soundSettings = {
+      music: { volume: 50, muted: false },
+      effects: { volume: 100, muted: false }
+    };
     // 统一弹窗状态：玩法说明和本局记录共享同一套分页/关闭交互。
     this.dialog = null;
     this.images = new ImageLoader(wxApi, () => this.render());
@@ -64,7 +69,8 @@ class MiniGameApp {
 
   render() {
     this.renderer.render(this.model, this.revealProgress, this.animating,
-      this.previousAiFist, this.uiPage, this.skinManager.id, this.homeIntro, this.dialog);
+      this.previousAiFist, this.uiPage, this.skinManager.id, this.homeIntro, this.dialog,
+      this.soundSettings);
   }
 
   dispatch(action) {
@@ -135,6 +141,21 @@ class MiniGameApp {
         this.uiPage = 'skins';
         this.audio.play('tap');
         break;
+      case 'SET_VOLUME': {
+        if (this.model.phase !== 'home' || this.uiPage !== 'settings') return;
+        const state = this.soundSettings[action.channel];
+        if (!state || !Number.isFinite(action.value)) return;
+        state.volume = Math.max(0, Math.min(100, Math.round(action.value)));
+        state.muted = false; // 移动滑杆解除手动静音；0% 自动展示 no-audio 图标。
+        break;
+      }
+      case 'TOGGLE_VOLUME_MUTE': {
+        if (this.model.phase !== 'home' || this.uiPage !== 'settings') return;
+        const state = this.soundSettings[action.channel];
+        if (!state) return;
+        state.muted = !state.muted; // 显示 mute 图标，不修改滑杆数值。
+        break;
+      }
       case 'CLOSE_SKINS':
         if (this.model.phase !== 'home' || this.uiPage !== 'skins') return;
         this.uiPage = 'settings';

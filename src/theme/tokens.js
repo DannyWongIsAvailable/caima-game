@@ -68,7 +68,7 @@ const theme = {
     callHeight: 43,
     primaryHeight: 52
   },
-  // 首页和设置页共享的布局坐标（375 × 720 设计空间）。
+  // 首页布局坐标（375 × 720 设计空间）。
   homeLayout: {
     title: { x: 187.5, y: 235 },
     // 人物从右侧探出；以原图 509:571 的宽高比自动计算显示高度。
@@ -77,8 +77,20 @@ const theme = {
     start: { x: 72.5, y: 485, width: 230, height: 62 },
     // 首页玩法说明位于右上角，设置入口保留在右下角。
     rules: { x: 16, y: 32, width: 54, height: 54 },
-    settings: { x: 305, y: 625, width: 54, height: 54 },
-    skinEntry: { x: 42, y: 335, width: 291, height: 62 }
+    settings: { x: 305, y: 625, width: 54, height: 54 }
+  },
+  // 设置页：皮肤入口 + 两条仅控制显示状态的音量滑杆。
+  settingsLayout: {
+    titleY: 169, subtitleY: 203,
+    x: 24, width: 327, labelX: 48,
+    skin: { y: 245, height: 74 },
+    music: { y: 337, height: 117 },
+    effects: { y: 472, height: 117 },
+    skinIcon: { x: 286, size: 42 },
+    audioIcon: { x: 47, size: 42 },
+    // 滑杆与 100% 文案之间预留间距，避免端点圆钮挤到百分比文字。
+    track: { x: 110, width: 148, offsetY: 85 },
+    percentX: 326
   },
   // 统一导航图标按钮与图标本身尺寸（画布设计坐标）。
   iconLayout: {

@@ -24,7 +24,7 @@ class CanvasRenderer {
     this.hitAreas = [];
   }
 
-  render(model, revealProgress, isAnimating, previousAiFist, viewPage, skinId, homeIntro, dialog) {
+  render(model, revealProgress, isAnimating, previousAiFist, viewPage, skinId, homeIntro, dialog, soundSettings) {
     this.hitAreas = [];
     const ctx = this.ctx;
     ctx.save();
@@ -34,7 +34,7 @@ class CanvasRenderer {
     this.viewport.useDesignSpace(ctx);
     if (model.phase === 'home') {
       if (viewPage === 'skins') this.drawSkins(ctx, skinId);
-      else if (viewPage === 'settings') this.drawSettings(ctx);
+      else if (viewPage === 'settings') this.drawSettings(ctx, soundSettings);
       else this.drawHome(ctx, homeIntro);
     } else this.drawGame(ctx, model, revealProgress, isAnimating, previousAiFist);
     if (dialog) {
@@ -129,14 +129,82 @@ class CanvasRenderer {
     }).join('\n\n');
   }
 
-  /** 设置页面仅保留「更换皮肤」主入口和返回导航。 */
-  drawSettings(ctx) {
+  /** 设置页中的音量状态仅用于 UI 展示，不影响实际音频。 */
+  drawSettings(ctx, soundSettings) {
     const back = theme.iconLayout.back;
     this.drawIconButton(ctx, 'back', back.x, back.y, back.width, back.height,
       { type: 'CLOSE_SETTINGS' }, true);
-    const button = theme.homeLayout.skinEntry;
-    this.drawActionButton(ctx, '更换皮肤', button.x, button.y,
-      button.width, button.height, { type: 'OPEN_SKINS' });
+
+    const S = theme.settingsLayout;
+    UI.label(ctx, '游戏设置', 187.5, S.titleY, {
+      size: 29, bold: true, color: C.primaryText, align: 'center'
+    });
+    UI.label(ctx, '选择喜欢的游戏外观与声音偏好', 187.5, S.subtitleY, {
+      size: F.detail, color: C.secondaryText, align: 'center'
+    });
+
+    UI.panel(ctx, S.x, S.skin.y, S.width, S.skin.height);
+    UI.label(ctx, '更换皮肤', S.labelX, S.skin.y + S.skin.height / 2, {
+      size: 21, color: C.primaryText, bold: true
+    });
+    this.drawSettingsAsset(ctx, 'iconSkin', S.skinIcon.x,
+      S.skin.y + (S.skin.height - S.skinIcon.size) / 2, S.skinIcon.size, '▣');
+    this.addHitArea(S.x, S.skin.y, S.width, S.skin.height, { type: 'OPEN_SKINS' });
+
+    const settings = soundSettings || {
+      music: { volume: 50, muted: false }, effects: { volume: 100, muted: false }
+    };
+    this.drawVolumeSetting(ctx, '游戏音乐', 'music', settings.music, S.music);
+    this.drawVolumeSetting(ctx, '游戏音效', 'effects', settings.effects, S.effects);
+  }
+
+  drawSettingsAsset(ctx, key, x, y, size, fallback) {
+    const image = this.images.get(key);
+    if (image) {
+      ctx.drawImage(image, x, y, size, size);
+    } else {
+      UI.label(ctx, fallback, x + size / 2, y + size / 2, {
+        size: 28, color: C.primaryText, align: 'center'
+      });
+    }
+  }
+
+  drawVolumeSetting(ctx, title, channel, setting, layout) {
+    const S = theme.settingsLayout;
+    const volume = Math.max(0, Math.min(100, Math.round(setting.volume)));
+    const iconKey = setting.muted ? 'iconMute' : volume === 0 ? 'iconNoAudio' : 'iconAudio';
+    UI.panel(ctx, S.x, layout.y, S.width, layout.height);
+    UI.label(ctx, title, S.labelX, layout.y + 28, {
+      size: 21, color: C.primaryText, bold: true
+    });
+
+    const iconY = layout.y + S.track.offsetY - S.audioIcon.size / 2;
+    this.drawSettingsAsset(ctx, iconKey, S.audioIcon.x, iconY, S.audioIcon.size,
+      setting.muted ? '×' : volume === 0 ? '○' : '♪');
+    this.addHitArea(S.audioIcon.x - 4, iconY - 4,
+      S.audioIcon.size + 8, S.audioIcon.size + 8, { type: 'TOGGLE_VOLUME_MUTE', channel });
+
+    const track = S.track;
+    const trackY = layout.y + track.offsetY;
+    roundedRect(ctx, track.x, trackY - 4, track.width, 8, 4, C.surfaceMuted);
+    if (volume > 0) {
+      roundedRect(ctx, track.x, trackY - 4, track.width * volume / 100,
+        8, 4, C.accent);
+    }
+    const thumbX = track.x + track.width * volume / 100;
+    ctx.beginPath();
+    ctx.arc(thumbX, trackY, 10, 0, Math.PI * 2);
+    ctx.fillStyle = C.accent;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = C.primaryText;
+    ctx.stroke();
+    UI.label(ctx, volume + '%', S.percentX, trackY + 1, {
+      size: 15, color: C.primaryText, align: 'right'
+    });
+    // 可点击轨道，也可在触摸移动时持续更新；轨道两端可准确达到 0%/100%。
+    this.addHitArea(track.x - 12, trackY - 22, track.width + 24, 44,
+      { type: 'SET_VOLUME', channel, trackX: track.x, trackWidth: track.width });
   }
 
   /** 皮肤选择页：只更换视觉资源，不影响比分和出码规则。 */
@@ -387,6 +455,12 @@ class CanvasRenderer {
     for (let i = this.hitAreas.length - 1; i >= 0; i -= 1) {
       const area = this.hitAreas[i];
       if (x >= area.x && x <= area.x + area.width && y >= area.y && y <= area.y + area.height) {
+        if (area.action.type === 'SET_VOLUME') {
+          return Object.assign({}, area.action, {
+            value: Math.max(0, Math.min(100,
+              Math.round((x - area.action.trackX) * 100 / area.action.trackWidth)))
+          });
+        }
         return area.action;
       }
     }
