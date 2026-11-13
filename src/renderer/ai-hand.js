@@ -8,68 +8,89 @@ const F = theme.typography;
 const L = theme.gameLayout;
 
 /**
- * 电脑手势展示层：素材独立于页面布局与胜负规则。
- * 透明 PNG（256×341）约定为「手腕从画面顶部进入，手指朝下」，hand-0.png ～ hand-5.png
- * 分别对应出拳 0～5。素材未加载时使用原有占位，避免阻断对局。
+ * 上下双手复用 hand-0～hand-5：原图手腕在上、手指向下。
+ * 电脑保持原方向（顶部贴边），玩家旋转 180°（底部贴边）。
+ * 所有素材等比缩放；动画仅平移，不改变边界锚点和手势比例。
  */
 function drawHand(ctx, images, fist, animation) {
+  drawAnimatedHand(ctx, images, fist, L.hand, false, animation);
   const opts = animation || {};
   const p = Math.max(0, Math.min(1, opts.progress == null ? 1 : opts.progress));
-  const animating = !!opts.isAnimating && Number.isInteger(fist);
-  const enterY = L.hand.enterY;
-
-  // 首次进入对局尚无电脑出拳结果，手势区域保持空白。
-  // 有结果后仍保留缺图占位兜底和原有伸手动画。
-  if (Number.isInteger(fist)) {
-    if (animating) {
-      // 旧手在新一轮选择时始终可见；真正出码时才逐渐向上收回。
-      const oldFist = Number.isInteger(opts.previousFist) ? opts.previousFist : null;
-      if (p < 1 && oldFist !== null) {
-        drawGesture(ctx, images, oldFist, -p * enterY, 1 - p);
-      }
-      // 新结果已经提交，使用本轮手势，自顶部往下伸出。
-      drawGesture(ctx, images, fist, -(1 - p) * enterY, 1);
-    } else {
-      // 非出码阶段固定停留在上一轮或本轮完成的姿势，不清空、不重复播放。
-      drawGesture(ctx, images, fist, 0, 1);
-    }
-  }
-
-  UI.label(ctx, '电脑出拳', L.handCaption.x, L.handCaption.y, {
-    size: F.miniLabel, color: C.secondaryText, align: 'center'
-  });
-  if (animating && p > 0) drawOptionalRevealSprite(ctx, images, p);
+  if (opts.isAnimating && p > 0) drawOptionalRevealSprite(ctx, images, p);
 }
 
-function drawGesture(ctx, images, fist, offsetY, alpha) {
-  const image = Number.isInteger(fist) ? images.get('hand' + fist) : null;
+function drawPlayerHand(ctx, images, fist, animation) {
+  drawAnimatedHand(ctx, images, fist, L.playerHand, true, animation);
+}
+
+function drawAnimatedHand(ctx, images, fist, bounds, fromBottom, animation) {
+  if (!Number.isInteger(fist)) return;
+  const opts = animation || {};
+  const p = Math.max(0, Math.min(1, opts.progress == null ? 1 : opts.progress));
+  const direction = fromBottom ? 1 : -1;
+  const alpha = opts.neutral ? 0.66 : 1;
+  if (opts.isAnimating) {
+    const oldFist = Number.isInteger(opts.previousFist) ? opts.previousFist : null;
+    if (p < 1 && oldFist !== null) {
+      // 旧手沿各自入场方向收回，再切换至新一轮手势。
+      drawGesture(ctx, images, oldFist, bounds, fromBottom,
+        direction * p * bounds.enterY, 1 - p);
+    }
+    // 电脑从上向下、玩家从下向上伸出，最后严格贴住边界。
+    drawGesture(ctx, images, fist, bounds, fromBottom,
+      direction * (1 - p) * bounds.enterY, alpha);
+  } else {
+    drawGesture(ctx, images, fist, bounds, fromBottom, 0, alpha);
+  }
+}
+
+function drawGesture(ctx, images, fist, bounds, fromBottom, offsetY, alpha) {
+  const image = images.get('hand' + fist);
   ctx.save();
   ctx.translate(0, offsetY);
   ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-  if (image) drawTopAlignedImage(ctx, image, L.hand);
-  else drawFallbackHand(ctx, fist);
+  const scale = image
+    ? Math.min(bounds.width / (image.width || 1), bounds.height / (image.height || 1))
+    : 1;
+  const width = image ? (image.width || 1) * scale : bounds.width;
+  const height = image ? (image.height || 1) * scale : bounds.height;
+  const x = bounds.x + (bounds.width - width) / 2;
+  const y = fromBottom ? bounds.bottomY - height : bounds.y;
+  if (image) {
+    if (fromBottom) {
+      ctx.save();
+      ctx.translate(x + width, y + height);
+      ctx.rotate(Math.PI);
+      ctx.drawImage(image, 0, 0, width, height);
+      ctx.restore();
+    } else {
+      ctx.drawImage(image, x, y, width, height);
+    }
+  } else {
+    drawFallbackHand(ctx, fist, x, y, width, height, fromBottom);
+  }
   ctx.restore();
 }
 
-function drawTopAlignedImage(ctx, image, bounds) {
-  const iw = image.width || 1;
-  const ih = image.height || 1;
-  // contain + 顶端对齐：不裁掉手指、不会将图片强制拉伸变形。
-  const scale = Math.min(bounds.width / iw, bounds.height / ih);
-  const width = iw * scale;
-  const height = ih * scale;
-  ctx.drawImage(image, bounds.x + (bounds.width - width) / 2, bounds.y, width, height);
-}
-
-function drawFallbackHand(ctx, fist) {
-  const hand = L.hand;
-  const cx = hand.x + hand.width / 2;
-  // 占位形状只表明手势绘制区域，不模拟 0～5 根手指，避免误导。
-  roundedRect(ctx, cx - 40, hand.y - 24, 80, 256, 26, C.handPlaceholder, C.handOutline);
-  roundedRect(ctx, cx - 71, hand.y + 178, 142, 152, 48, C.handPlaceholder, C.handOutline);
-  UI.label(ctx, fist === null ? '?' : String(fist), cx, hand.y + 255, {
-    size: F.handFallback, bold: true, color: C.accent, align: 'center'
-  });
+function drawFallbackHand(ctx, fist, x, y, width, height, fromBottom) {
+  const originalX = x;
+  const originalY = y;
+  ctx.save();
+  if (fromBottom) {
+    ctx.translate(x + width, y + height);
+    ctx.rotate(Math.PI);
+    x = 0;
+    y = 0;
+  }
+  roundedRect(ctx, x + width * 0.35, y, width * 0.30, height * 0.58,
+    20, C.handPlaceholder, C.handOutline);
+  roundedRect(ctx, x + width * 0.18, y + height * 0.37, width * 0.64, height * 0.43,
+    30, C.handPlaceholder, C.handOutline);
+  ctx.restore();
+  // 资源加载失败时数字保持正向可读（不随手部旋转）。
+  UI.label(ctx, String(fist), originalX + width / 2,
+    originalY + height * (fromBottom ? 0.34 : 0.65),
+    { size: F.handFallback, bold: true, color: C.accent, align: 'center' });
 }
 
 function drawOptionalRevealSprite(ctx, images, progress) {
@@ -80,8 +101,9 @@ function drawOptionalRevealSprite(ctx, images, progress) {
   const frame = Math.min(frames - 1, Math.floor(progress * frames));
   ctx.save();
   ctx.globalAlpha = progress * 0.8;
-  ctx.drawImage(image, frame * width, 0, width, image.height, 218, 267, 58, 58);
+  // 可选粒子特效放在中间上方，不覆盖两侧数字按钮。
+  ctx.drawImage(image, frame * width, 0, width, image.height, 208, 260, 42, 42);
   ctx.restore();
 }
 
-module.exports = { drawHand };
+module.exports = { drawHand, drawPlayerHand };

@@ -103,24 +103,25 @@ const theme = {
     previewX: 39, previewWidth: 42, previewHeight: 74,
     textX: 100, footerY: 690
   },
-  // 对战页仅留绘图区域与数字操作区；这些是 375x720 设计空间坐标。
-  // 修改这里可整体调整手势插画、喊码和按钮，不改变游戏逻辑。
+  // 对战页：两只手分别贴住设计空间的上下边界，按钮移至左右边缘。
+  // 375 × 720；手部 PNG 自带透明边，按原比例显示，避免变形。
   gameLayout: {
-    hand: { x: 26, y: -38, width: 250, height: 381, enterY: 390 },
-    call: { x: 311, labelY: 150, numberY: 217 },
-    // 本局出码记录入口（复用 rule.png），位于对局页右侧中部。
-    history: { x: 305, y: 282, width: 54, height: 54, labelY: 350 },
-    handCaption: { x: 145, y: 347 },
-    scoreY: 374,
-    detailY: 402,
-    outcomeY: 425,
+    // 额外向画布外延伸 30px 的手腕，抵消全面屏安全区的上下留白。
+    hand: { x: 70, y: -30, width: 225, height: 305, enterY: 340 },
+    playerHand: { x: 70, bottomY: 750, width: 225, height: 305, enterY: 340 },
+    // 中央预留给电脑喊码、比分、每码结果；右上角保留出码记录入口。
+    call: { x: 187.5, labelY: 291, numberY: 321 },
+    history: { x: 314, y: 20, width: 42, height: 42, labelY: 79 },
+    scoreY: 360,
+    detailY: 384,
+    outcomeY: 408,
     picking: {
-      x: 22, labelX: 22,
-      fistLabelY: 456, fistButtonY: 472,
-      callLabelY: 541, callFirstY: 557, callSecondY: 607,
-      gap: 8
+      // 左侧一列：0～5；右侧两列：0～10。
+      fist: { x: 14, y: 163, width: 46, height: 46, rowGap: 9, labelX: 14, labelY: 139 },
+      call: { x: 276, y: 163, width: 43, height: 46, columnGap: 7, rowGap: 9,
+        labelX: 322, labelY: 139 }
     },
-    restart: { x: 24, y: 608, width: 327, height: 52 }
+    restart: { x: 97, y: 440, width: 181, height: 49 }
   }
 };
 

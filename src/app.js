@@ -29,6 +29,11 @@ class MiniGameApp {
     this.images = new ImageLoader(wxApi, () => this.render());
     this.audio = new AudioManager(wxApi);
     this.animator = new RevealAnimator(this.canvas);
+    // 仅在本轮正式提交（选完出拳和喊码）后，让玩家手势由底部伸出。
+    this.playerHandAnimator = new RevealAnimator(this.canvas);
+    this.playerHandProgress = 1;
+    this.playerHandAnimating = false;
+    this.previousPlayerFist = null;
     this.homeIntroAnimator = new HomeIntroAnimator(this.canvas);
     this.renderer = new CanvasRenderer(this.canvas, this.viewport, this.images);
     this.touch = new TouchController(
@@ -70,7 +75,11 @@ class MiniGameApp {
   render() {
     this.renderer.render(this.model, this.revealProgress, this.animating,
       this.previousAiFist, this.uiPage, this.skinManager.id, this.homeIntro, this.dialog,
-      this.soundSettings);
+      this.soundSettings, {
+        progress: this.playerHandProgress,
+        isAnimating: this.playerHandAnimating,
+        previousFist: this.previousPlayerFist
+      });
   }
 
   dispatch(action) {
@@ -80,6 +89,7 @@ class MiniGameApp {
       if (this.model.phase === 'home') return;
       this.clearAutoNext();
       this.animator.stop();
+      this.stopPlayerHandAnimation();
       this.animating = false;
       this.previousAiFist = null;
       this.revealProgress = 1;
@@ -172,15 +182,18 @@ class MiniGameApp {
         this.clearAutoNext();
         this.stopHomeIntro(true);
         this.model.start();
+        this.stopPlayerHandAnimation();
         this.dialog = null;
         this.previousAiFist = null;
         this.revealProgress = 1;
         this.audio.play('tap');
         break;
-      case 'FIST':
+      case 'FIST': {
+        // 只高亮待出拳数字；手势仍保持上一轮（首轮待机）状态。
         if (!this.model.selectFist(action.value)) return;
         this.audio.play('tap');
         break;
+      }
       case 'CALL':
         if (!this.model.selectCall(action.value)) return;
         this.audio.play('tap');
@@ -192,6 +205,35 @@ class MiniGameApp {
     }
     this.revealProgress = 1;
     this.render();
+  }
+
+  /** 正式出码后才更新玩家手势：旧手收回，新手从底部伸出。 */
+  animatePlayerHand(previousFist) {
+    this.playerHandAnimator.stop();
+    this.previousPlayerFist = previousFist;
+    this.playerHandProgress = 0;
+    this.playerHandAnimating = true;
+    this.playerHandAnimator.play(
+      (progress) => {
+        if (!this.mounted) return;
+        this.playerHandProgress = progress;
+        this.render();
+      },
+      () => {
+        if (!this.mounted) return;
+        this.playerHandProgress = 1;
+        this.playerHandAnimating = false;
+        this.previousPlayerFist = null;
+        this.render();
+      }
+    );
+  }
+
+  stopPlayerHandAnimation() {
+    this.playerHandAnimator.stop();
+    this.playerHandProgress = 1;
+    this.playerHandAnimating = false;
+    this.previousPlayerFist = null;
   }
 
   startHomeIntro() {
@@ -221,15 +263,15 @@ class MiniGameApp {
   }
 
   resolveRound() {
-    // 在 submit 更新 lastResult 前记住上一轮的手势。
-    // 新喊码立即更新；旧手势收回，新手势同步从顶部伸出。
+    // 在 submit 更新 lastResult 前记录双方上一轮的手势，选拳阶段不更新玩家手。
     const previous = this.model.lastResult;
     const result = this.model.submit();
     if (!result) return;
     this.previousAiFist = previous ? previous.ai.fist : null;
     this.revealProgress = 0;
     this.animating = true;
-    this.render();
+    // 喊码触发正式出码时，玩家与电脑的手势才一起切换。
+    this.animatePlayerHand(previous ? previous.player.fist : null);
     this.audio.play('reveal');
     this.animator.play(
       (progress) => {
@@ -271,6 +313,7 @@ class MiniGameApp {
     this.mounted = false;
     this.clearAutoNext();
     this.animator.stop();
+    this.stopPlayerHandAnimation();
     this.homeIntroAnimator.stop();
     this.touch.unmount();
     this.audio.destroy();

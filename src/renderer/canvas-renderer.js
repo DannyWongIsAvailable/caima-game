@@ -3,7 +3,7 @@ const CONFIG = require('../config/game-config');
 const { drawImageCover, roundedRect } = require('./draw-utils');
 const { SKINS } = require('../theme/skins');
 const UI = require('./ui-components');
-const { drawHand } = require('./ai-hand');
+const { drawHand, drawPlayerHand } = require('./ai-hand');
 const drawPagedDialog = require('./paged-dialog');
 
 const C = theme.colors;
@@ -24,7 +24,7 @@ class CanvasRenderer {
     this.hitAreas = [];
   }
 
-  render(model, revealProgress, isAnimating, previousAiFist, viewPage, skinId, homeIntro, dialog, soundSettings) {
+  render(model, revealProgress, isAnimating, previousAiFist, viewPage, skinId, homeIntro, dialog, soundSettings, playerHandAnimation) {
     this.hitAreas = [];
     const ctx = this.ctx;
     ctx.save();
@@ -36,7 +36,7 @@ class CanvasRenderer {
       if (viewPage === 'skins') this.drawSkins(ctx, skinId);
       else if (viewPage === 'settings') this.drawSettings(ctx, soundSettings);
       else this.drawHome(ctx, homeIntro);
-    } else this.drawGame(ctx, model, revealProgress, isAnimating, previousAiFist);
+    } else this.drawGame(ctx, model, revealProgress, isAnimating, previousAiFist, playerHandAnimation);
     if (dialog) {
       // 清除底层点击区：两个弹窗都只响应关闭与翻页，不会误触游戏按钮。
       this.hitAreas = [];
@@ -111,12 +111,13 @@ class CanvasRenderer {
       settings.height, { type: 'OPEN_SETTINGS' });
   }
 
-  /** 将已结算记录格式化，供可复用弹窗按段分页。每段是一条完整的出码记录。 */
+  /** 将已结算记录按最新优先格式化，供可复用弹窗按段分页。每段是一条完整的出码记录。 */
   formatHistory(records) {
     if (!records || records.length === 0) {
       return '本局暂无出码记录。\n完成首次出拳和喊码后，将自动记录在这里。';
     }
-    return records.map((item) => {
+    // 仅倒序展示，不修改游戏模型中按时间顺序写入的原始历史记录。
+    return records.slice().reverse().map((item) => {
       let outcome = '不计分';
       if (item.outcome === 'player') outcome = '你 +1 分';
       else if (item.outcome === 'ai') outcome = '电脑 +1 分';
@@ -324,24 +325,24 @@ class CanvasRenderer {
     if (action) this.addHitArea(x, y, width, height, action);
   }
 
-  drawGame(ctx, model, revealProgress, isAnimating, previousAiFist) {
-    // 对战页是「大手势 + 旁边喊码 + 文字比分 + 无卡片数字操作区」。
-    // 不绘制顶端标题、原中部步骤卡片、原底部提示卡片。
+  drawGame(ctx, model, revealProgress, isAnimating, previousAiFist, playerHandAnimation) {
     const result = model.lastResult;
-    // 选择阶段保留上一轮展示；选完喊码时新喊码立即更新，手势播放伸出动画。
+    // 图层顺序：上下手势 → 中间信息 → 两侧操作区和图标；保证按钮清晰可点。
     this.drawAiArea(ctx, result, {
       progress: isAnimating ? revealProgress : 1,
       isAnimating,
       previousFist: previousAiFist
     });
+    this.drawPlayerArea(ctx, model, playerHandAnimation);
     this.drawGameText(ctx, model);
-    // 复用首页 rule.png：对局中的右侧中部入口用于查看本局全部出码记录。
+
     const history = L.history;
     this.drawIconButton(ctx, 'rules', history.x, history.y, history.width, history.height,
       { type: 'OPEN_HISTORY' });
     UI.label(ctx, '出码记录', history.x + history.width / 2, history.labelY, {
       size: F.note, color: C.secondaryText, align: 'center'
     });
+
     if (model.phase === 'over') {
       const b = L.restart;
       this.drawActionButton(ctx, '再玩一局', b.x, b.y, b.width, b.height,
@@ -349,7 +350,6 @@ class CanvasRenderer {
     } else {
       this.drawPickingControls(ctx, model);
     }
-    // 顶部独立入口：动画/结算期间也始终能返回首页。
     const home = theme.iconLayout.home;
     this.drawIconButton(ctx, 'home', home.x, home.y, home.width, home.height,
       { type: 'RETURN_HOME' });
@@ -360,33 +360,47 @@ class CanvasRenderer {
     UI.label(ctx, '电脑喊码', L.call.x, L.call.labelY, {
       size: F.miniLabel, color: C.secondaryText, align: 'center'
     });
-    // 首次进入时无结果，喊码区域保持空白；开码后立即显示新数字。
     if (result) {
       UI.label(ctx, result.ai.call, L.call.x, L.call.numberY, {
-        size: F.aiCall, color: C.aiCallText || C.accent, bold: true, align: 'center'
+        size: 48, color: C.aiCallText || C.accent, bold: true, align: 'center'
+      });
+    } else {
+      UI.label(ctx, '—', L.call.x, L.call.numberY, {
+        size: 35, color: C.secondaryText, align: 'center'
       });
     }
   }
 
+  drawPlayerArea(ctx, model, animation) {
+    // 玩家只是选择数字时不切换手势；正式出码后 lastResult 才更新。
+    // 首轮未出码前，保留半透明握拳待机姿势。
+    const fist = model.lastResult ? model.lastResult.player.fist : 0;
+    drawPlayerHand(ctx, this.images, fist, Object.assign({
+      neutral: !model.lastResult
+    }, animation || {}));
+  }
+
   drawGameText(ctx, model) {
-    // 比分不再有背景卡片，始终只占一行小字。
     UI.label(ctx,
-      '你 ' + model.score.player + '  :  ' + model.score.ai + '  电脑     ·     第 ' + model.roundNumber + ' 码',
+      '你 ' + model.score.player + ' : ' + model.score.ai + ' 电脑  ·  第 ' + model.roundNumber + ' 码',
       187.5, L.scoreY, {
-        size: F.compactScore, color: C.secondaryText, align: 'center'
+        size: F.compactScore, color: C.secondaryText, align: 'center', maxWidth: 172
       });
 
     const result = model.lastResult;
     if (!result || model.phase === 'picking') {
-      UI.label(ctx, '选出拳，再点喊码直接开码', 187.5, L.detailY, {
-        size: F.note, color: C.secondaryText, align: 'center'
+      UI.label(ctx, '先出拳 · 再喊码', 187.5, L.detailY, {
+        size: F.note, color: C.primaryText, align: 'center', maxWidth: 172
+      });
+      UI.label(ctx, '点右侧数字自动开码', 187.5, L.outcomeY, {
+        size: F.note, color: C.secondaryText, align: 'center', maxWidth: 172
       });
       return;
     }
     UI.label(ctx,
       '合计 ' + result.total + ' · 你出 ' + result.player.fist + ' / 喊 ' + result.player.call,
       187.5, L.detailY, {
-        size: F.note, color: C.primaryText, align: 'center'
+        size: F.note, color: C.primaryText, align: 'center', maxWidth: 172
       });
 
     let text = '未分胜负 · 自动下一码';
@@ -404,7 +418,7 @@ class CanvasRenderer {
       color = model.champion === 'player' ? C.success : C.danger;
     }
     UI.label(ctx, text, 187.5, L.outcomeY, {
-      size: F.detail, bold: true, color, align: 'center'
+      size: F.detail, bold: true, color, align: 'center', maxWidth: 172
     });
   }
 
@@ -412,27 +426,27 @@ class CanvasRenderer {
     const p = L.picking;
     const picking = model.phase === 'picking';
     const fistSelected = model.player.fist !== null;
-    const size = theme.control.pickSize;
-    const stride = size + p.gap;
 
-    // 纯标签+数字按钮，不再用大卡片包裹。
-    UI.label(ctx, '你的出拳', p.labelX, p.fistLabelY, {
+    // 左侧一列：0～5，按视觉顺序与触摸热区保持一一对应。
+    UI.label(ctx, '你的出拳', p.fist.labelX, p.fist.labelY, {
       size: F.miniLabel, color: C.secondaryText
     });
     for (let i = 0; i <= 5; i += 1) {
-      this.drawPickButton(ctx, String(i), p.x + i * stride, p.fistButtonY,
-        size, theme.control.fistHeight, model.player.fist === i,
+      const y = p.fist.y + i * (p.fist.height + p.fist.rowGap);
+      this.drawPickButton(ctx, String(i), p.fist.x, y,
+        p.fist.width, p.fist.height, model.player.fist === i,
         picking ? { type: 'FIST', value: i } : null, !picking);
     }
 
-    UI.label(ctx, '你的喊码', p.labelX, p.callLabelY, {
-      size: F.miniLabel, color: C.secondaryText
+    // 右侧两列，从左到右、从上到下依次排列 0～10。
+    UI.label(ctx, '你的喊码', p.call.labelX, p.call.labelY, {
+      size: F.miniLabel, color: C.secondaryText, align: 'center'
     });
     for (let n = 0; n <= 10; n += 1) {
-      const x = p.x + (n % 6) * stride;
-      const y = n < 6 ? p.callFirstY : p.callSecondY;
+      const x = p.call.x + (n % 2) * (p.call.width + p.call.columnGap);
+      const y = p.call.y + Math.floor(n / 2) * (p.call.height + p.call.rowGap);
       const available = picking && fistSelected;
-      this.drawPickButton(ctx, String(n), x, y, size, theme.control.callHeight,
+      this.drawPickButton(ctx, String(n), x, y, p.call.width, p.call.height,
         model.player.call === n,
         available ? { type: 'CALL', value: n } : null, !available);
     }
