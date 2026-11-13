@@ -6,6 +6,8 @@ const TouchController = require('./input/touch-controller');
 const PressFeedback = require('./input/press-feedback');
 const ImageLoader = require('./media/image-loader');
 const AudioManager = require('./media/audio-manager');
+const BgmManager = require('./media/bgm-manager');
+const Storage = require('./core/storage');
 const RevealAnimator = require('./animation/reveal-animator');
 const HomeIntroAnimator = require('./animation/home-intro-animator');
 const SkinManager = require('./theme/skin-manager');
@@ -18,13 +20,25 @@ class MiniGameApp {
     this.canvas = wxApi.createCanvas();
     this.viewport = new Viewport(wxApi, this.canvas);
     this.model = new GameModel(opts.randomFn);
-    this.skinManager = new SkinManager(wxApi);
+    this.storage = new Storage(wxApi);
+    this.skinManager = new SkinManager(wxApi, this.storage);
     this.uiPage = 'home';
-    // 音量设置在当前 MVP 仅保存于内存，供设置页展示与交互，不控制 AudioManager。
+    const saved = this.storage.get('guangxi_caima_sound_v1', {});
+    const stored = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+    const restored = (value, fallback) => ({
+      volume: value && Number.isFinite(value.volume)
+        ? Math.max(0, Math.min(100, Math.round(value.volume))) : fallback,
+      muted: value && typeof value.muted === 'boolean' ? value.muted : false
+    });
     this.soundSettings = {
-      music: { volume: 50, muted: false },
-      effects: { volume: 100, muted: false }
+      music: restored(stored.music, 50),
+      effects: restored(stored.effects, 100)
     };
+    this.bgm = new BgmManager(wxApi, opts.musicRandomFn, null,
+      (message) => this.showBgmToast(message));
+    this.bgmMode = this.bgm.isValidMode(stored.bgmMode) ? stored.bgmMode : 'random';
+    this.bgmToast = '';
+    this.bgmToastTimer = null;
     // 统一弹窗状态：玩法说明和本局记录共享同一套分页/关闭交互。
     this.dialog = null;
     this.images = new ImageLoader(wxApi, () => this.render());
@@ -72,6 +86,8 @@ class MiniGameApp {
     this.images.loadSkin(this.skinManager.current());
     this.images.loadSkinPreviews(this.skinManager.list());
     this.audio.prepare();
+    this.applySoundSettings('effects');
+    this.bgm.start(this.bgmMode, this.soundSettings.music.volume, this.soundSettings.music.muted);
     this.touch.mount();
     this.startHomeIntro();
     this.render();
@@ -87,7 +103,20 @@ class MiniGameApp {
         progress: this.playerHandProgress,
         isAnimating: this.playerHandAnimating,
         previousFist: this.previousPlayerFist
-      });
+      }, this.bgmMode, this.bgmToast);
+  }
+
+  /** Canvas 内轻量气泡提示，不阻挡触摸，数秒后自动消失。 */
+  showBgmToast(message) {
+    if (!message || !this.mounted) return;
+    if (this.bgmToastTimer !== null) this.unschedule(this.bgmToastTimer);
+    this.bgmToast = String(message);
+    this.render();
+    this.bgmToastTimer = this.schedule(() => {
+      this.bgmToastTimer = null;
+      this.bgmToast = '';
+      if (this.mounted) this.render();
+    }, 2600);
   }
 
   dispatch(action) {
@@ -159,12 +188,32 @@ class MiniGameApp {
         this.uiPage = 'skins';
         this.audio.play('tap');
         break;
+      case 'OPEN_BGM':
+        if (this.model.phase !== 'home' || this.uiPage !== 'settings') return;
+        this.uiPage = 'bgm';
+        this.audio.play('tap');
+        break;
+      case 'CLOSE_BGM':
+        if (this.model.phase !== 'home' || this.uiPage !== 'bgm') return;
+        this.uiPage = 'settings';
+        this.audio.play('tap');
+        break;
+      case 'SELECT_BGM':
+        if (this.model.phase !== 'home' || this.uiPage !== 'bgm') return;
+        if (!this.bgm.isValidMode(action.id)) return;
+        this.bgmMode = action.id;
+        this.bgm.select(action.id);
+        this.saveSoundSettings();
+        this.audio.play('tap');
+        break;
       case 'SET_VOLUME': {
         if (this.model.phase !== 'home' || this.uiPage !== 'settings') return;
         const state = this.soundSettings[action.channel];
         if (!state || !Number.isFinite(action.value)) return;
         state.volume = Math.max(0, Math.min(100, Math.round(action.value)));
         state.muted = false; // 移动滑杆解除手动静音；0% 自动展示 no-audio 图标。
+        this.applySoundSettings(action.channel);
+        this.saveSoundSettings();
         break;
       }
       case 'TOGGLE_VOLUME_MUTE': {
@@ -172,6 +221,8 @@ class MiniGameApp {
         const state = this.soundSettings[action.channel];
         if (!state) return;
         state.muted = !state.muted; // 显示 mute 图标，不修改滑杆数值。
+        this.applySoundSettings(action.channel);
+        this.saveSoundSettings();
         break;
       }
       case 'CLOSE_SKINS':
@@ -213,6 +264,20 @@ class MiniGameApp {
     }
     this.revealProgress = 1;
     this.render();
+  }
+
+  applySoundSettings(channel) {
+    const state = this.soundSettings[channel];
+    if (channel === 'music') this.bgm.setVolume(state.volume, state.muted);
+    if (channel === 'effects') this.audio.setVolume(state.volume, state.muted);
+  }
+
+  saveSoundSettings() {
+    this.storage.set('guangxi_caima_sound_v1', {
+      bgmMode: this.bgmMode,
+      music: Object.assign({}, this.soundSettings.music),
+      effects: Object.assign({}, this.soundSettings.effects)
+    });
   }
 
   /** 正式出码后才更新玩家手势：旧手收回，新手从底部伸出。 */
@@ -320,12 +385,16 @@ class MiniGameApp {
   destroy() {
     this.mounted = false;
     this.clearAutoNext();
+    if (this.bgmToastTimer !== null) this.unschedule(this.bgmToastTimer);
+    this.bgmToastTimer = null;
+    this.bgmToast = '';
     this.animator.stop();
     this.stopPlayerHandAnimation();
     this.homeIntroAnimator.stop();
     this.touch.unmount();
     this.pressFeedback.clear();
     this.audio.destroy();
+    this.bgm.destroy();
     if (typeof this.wxApi.offWindowResize === 'function') {
       this.wxApi.offWindowResize(this.handleResize);
     }

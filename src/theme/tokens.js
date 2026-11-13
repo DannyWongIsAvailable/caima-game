@@ -79,18 +79,24 @@ const theme = {
     rules: { x: 16, y: 32, width: 54, height: 54 },
     settings: { x: 305, y: 625, width: 54, height: 54 }
   },
-  // 设置页：皮肤入口 + 两条仅控制显示状态的音量滑杆。
+  // 设置页：皮肤入口 + 背景音乐选择入口 + 两条音量滑杆。
   settingsLayout: {
-    titleY: 169, subtitleY: 203,
+    titleY: 145, subtitleY: 179,
     x: 24, width: 327, labelX: 48,
-    skin: { y: 245, height: 74 },
-    music: { y: 337, height: 117 },
-    effects: { y: 472, height: 117 },
+    skin: { y: 217, height: 74 },
+    bgm: { y: 307, height: 74 },
+    music: { y: 397, height: 117 },
+    effects: { y: 532, height: 117 },
     skinIcon: { x: 286, size: 42 },
     audioIcon: { x: 47, size: 42 },
     // 滑杆与 100% 文案之间预留间距，避免端点圆钮挤到百分比文字。
     track: { x: 110, width: 148, offsetY: 85 },
     percentX: 326
+  },
+  // 背景音乐选择页：默认随机，其余四首为单曲循环。
+  bgmLayout: {
+    titleY: 82, subtitleY: 118,
+    x: 24, width: 327, y: 167, rowHeight: 69, rowGap: 11, footerGap: 25
   },
   // 导航图标按钮的绘制区域与图片区域一致（画布设计坐标）。
   iconLayout: {

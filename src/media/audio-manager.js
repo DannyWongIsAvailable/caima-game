@@ -5,6 +5,16 @@ class AudioManager {
   constructor(wxApi) {
     this.wxApi = wxApi;
     this.sounds = Object.create(null);
+    this.volume = 100;
+    this.muted = false;
+  }
+
+  setVolume(volume, muted) {
+    this.volume = Number.isFinite(volume) ? Math.max(0, Math.min(100, volume)) : 100;
+    this.muted = !!muted;
+    Object.keys(this.sounds).forEach((key) => {
+      this.sounds[key].volume = this.muted ? 0 : this.volume / 100;
+    });
   }
 
   prepare() {
@@ -13,6 +23,7 @@ class AudioManager {
       if (!config.enabled || !config.src || !this.wxApi.createInnerAudioContext) return;
       const audio = this.wxApi.createInnerAudioContext();
       audio.autoplay = false;
+      audio.volume = this.muted ? 0 : this.volume / 100;
       audio.src = config.src;
       if (typeof audio.onError === 'function') {
         audio.onError(() => console.warn('[媒体] 音频不可用:', config.src));

@@ -1,17 +1,14 @@
 const theme = require('./tokens');
 const { SKINS, findSkin, DEFAULT_SKIN_ID } = require('./skins');
+const Storage = require('../core/storage');
 
 const STORAGE_KEY = 'guangxi_caima_skin_v1';
 
 /** 在同一个 colors 对象上更新调色板，保证 Renderer/UI 持有的引用同步变更。 */
 class SkinManager {
-  constructor(wxApi) {
-    this.wxApi = wxApi;
-    let savedId = DEFAULT_SKIN_ID;
-    if (typeof wxApi.getStorageSync === 'function') {
-      try { savedId = wxApi.getStorageSync(STORAGE_KEY) || DEFAULT_SKIN_ID; }
-      catch (_) { /* 禁止存储时回退到默认皮肤 */ }
-    }
+  constructor(wxApi, storage) {
+    this.storage = storage || new Storage(wxApi);
+    const savedId = this.storage.get(STORAGE_KEY, DEFAULT_SKIN_ID);
     this.id = findSkin(savedId) ? savedId : DEFAULT_SKIN_ID;
     this.apply(this.id);
   }
@@ -40,10 +37,7 @@ class SkinManager {
     if (!findSkin(id)) return false;
     if (id === this.id) return true;
     this.apply(id);
-    if (typeof this.wxApi.setStorageSync === 'function') {
-      try { this.wxApi.setStorageSync(STORAGE_KEY, id); }
-      catch (_) { /* 仅影响下次启动的记忆，不影响当次换肤 */ }
-    }
+    this.storage.set(STORAGE_KEY, id);
     return true;
   }
 }

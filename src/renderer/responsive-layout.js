@@ -28,13 +28,24 @@ function createResponsiveLayout(viewport) {
   };
 
   const settingsBase = theme.settingsLayout;
-  const settingsShift = delta * 0.38;
+  const settingsShift = delta * (delta < 0 ? 0.55 : 0.35);
   const settings = Object.assign({}, settingsBase, {
     titleY: settingsBase.titleY + settingsShift,
     subtitleY: settingsBase.subtitleY + settingsShift,
     skin: moveY(settingsBase.skin, settingsShift),
+    bgm: moveY(settingsBase.bgm, settingsShift),
     music: moveY(settingsBase.music, settingsShift),
     effects: moveY(settingsBase.effects, settingsShift)
+  });
+
+  const bgmBase = theme.bgmLayout;
+  const bgmShift = delta * (delta < 0 ? 0.30 : 0.34);
+  const bgm = Object.assign({}, bgmBase, {
+    titleY: bgmBase.titleY + bgmShift,
+    subtitleY: bgmBase.subtitleY + bgmShift,
+    y: bgmBase.y + bgmShift,
+    footerY: bgmBase.y + bgmShift + 5 * bgmBase.rowHeight +
+      4 * bgmBase.rowGap + bgmBase.footerGap
   });
 
   const skinBase = theme.skinLayout;
@@ -100,7 +111,7 @@ function createResponsiveLayout(viewport) {
   };
 
   return {
-    width, height, home, settings, skins, game, dialog,
+    width, height, home, settings, bgm, skins, game, dialog,
     icons: theme.iconLayout
   };
 }

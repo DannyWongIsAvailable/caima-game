@@ -6,6 +6,7 @@ const UI = require('./ui-components');
 const { drawHand, drawPlayerHand } = require('./ai-hand');
 const drawPagedDialog = require('./paged-dialog');
 const createResponsiveLayout = require('./responsive-layout');
+const PLAYLIST = require('../media/bgm-playlist');
 
 const C = theme.colors;
 const F = theme.typography;
@@ -27,7 +28,7 @@ class CanvasRenderer {
     this.layout = createResponsiveLayout(viewport);
   }
 
-  render(model, revealProgress, isAnimating, previousAiFist, viewPage, skinId, homeIntro, dialog, soundSettings, playerHandAnimation) {
+  render(model, revealProgress, isAnimating, previousAiFist, viewPage, skinId, homeIntro, dialog, soundSettings, playerHandAnimation, bgmMode, bgmToast) {
     this.layout = createResponsiveLayout(this.viewport);
     this.hitAreas = [];
     // 场景及弹窗切换时同步清理按下状态，稳定键包含场景域。
@@ -42,7 +43,8 @@ class CanvasRenderer {
     this.viewport.useDesignSpace(ctx);
     if (model.phase === 'home') {
       if (viewPage === 'skins') this.drawSkins(ctx, skinId);
-      else if (viewPage === 'settings') this.drawSettings(ctx, soundSettings);
+      else if (viewPage === 'bgm') this.drawBgmSelection(ctx, bgmMode);
+      else if (viewPage === 'settings') this.drawSettings(ctx, soundSettings, skinId, bgmMode);
       else this.drawHome(ctx, homeIntro);
     } else this.drawGame(ctx, model, revealProgress, isAnimating, previousAiFist, playerHandAnimation);
     if (dialog) {
@@ -62,7 +64,23 @@ class CanvasRenderer {
           (action) => this.pressProgress(action));
       }
     }
+    if (bgmToast) this.drawBgmToast(ctx, bgmToast);
     ctx.restore();
+    ctx.restore();
+  }
+
+  /** 音乐异常时短暂显示的气泡，不创建点击区域。 */
+  drawBgmToast(ctx, message) {
+    const x = 24;
+    const y = 74;
+    const width = 327;
+    const height = 44;
+    ctx.save();
+    // 只画透明圆角边框和文本，不填充任何背景，也不绘制实心尾巴。
+    roundedRect(ctx, x, y, width, height, 14, null, C.accent);
+    UI.label(ctx, message, 187.5, y + height / 2 + 1, {
+      size: 14, color: C.primaryText, align: 'center', maxWidth: width - 22
+    });
     ctx.restore();
   }
 
@@ -143,8 +161,8 @@ class CanvasRenderer {
     }).join('\n\n');
   }
 
-  /** 设置页中的音量状态仅用于 UI 展示，不影响实际音频。 */
-  drawSettings(ctx, soundSettings) {
+  /** 设置页：皮肤与背景音乐入口显示已选项，音乐/音效音量保持独立。 */
+  drawSettings(ctx, soundSettings, skinId, bgmMode) {
     const back = this.layout.icons.back;
     this.drawIconButton(ctx, 'back', back.x, back.y, back.width, back.height,
       { type: 'CLOSE_SETTINGS' });
@@ -153,28 +171,84 @@ class CanvasRenderer {
     UI.label(ctx, '游戏设置', 187.5, S.titleY, {
       size: 29, bold: true, color: C.primaryText, align: 'center'
     });
-    UI.label(ctx, '选择喜欢的游戏外观与声音偏好', 187.5, S.subtitleY, {
-      size: F.detail, color: C.secondaryText, align: 'center'
-    });
+
+    // 设置卡片直接展示当前选择。使用已传入的场景状态，不另建缓存，确保切换与重启后即时同步。
+    const activeSkin = SKINS.find((item) => item.id === skinId);
+    const skinName = activeSkin ? activeSkin.name : SKINS[0].name;
+    const activeSong = PLAYLIST.find((item) => item.id === bgmMode);
+    const bgmName = activeSong ? activeSong.name : '随机';
+    // 为右侧图标留白，较长曲目在 Canvas 中限制绘制宽度。
+    const summaryWidth = S.skinIcon.x - S.labelX - 12;
 
     const skinAction = { type: 'OPEN_SKINS' };
     const skinProgress = this.pressProgress(skinAction);
     UI.withPress(ctx, S.x, S.skin.y, S.width, S.skin.height, skinProgress, 'card', () => {
       UI.panel(ctx, S.x, S.skin.y, S.width, S.skin.height);
       UI.pressTint(ctx, S.x, S.skin.y, S.width, S.skin.height, theme.radii.panel, skinProgress);
-      UI.label(ctx, '更换皮肤', S.labelX, S.skin.y + S.skin.height / 2, {
+      UI.label(ctx, '更换皮肤', S.labelX, S.skin.y + 27, {
         size: 21, color: C.primaryText, bold: true
+      });
+      UI.label(ctx, '当前：' + skinName, S.labelX, S.skin.y + 53, {
+        size: F.detail, color: C.secondaryText, maxWidth: summaryWidth
       });
       this.drawSettingsAsset(ctx, 'iconSkin', S.skinIcon.x,
         S.skin.y + (S.skin.height - S.skinIcon.size) / 2, S.skinIcon.size, '▣');
     });
     this.addHitArea(S.x, S.skin.y, S.width, S.skin.height, skinAction);
 
+    const bgmAction = { type: 'OPEN_BGM' };
+    const bgmProgress = this.pressProgress(bgmAction);
+    UI.withPress(ctx, S.x, S.bgm.y, S.width, S.bgm.height, bgmProgress, 'card', () => {
+      UI.panel(ctx, S.x, S.bgm.y, S.width, S.bgm.height);
+      UI.pressTint(ctx, S.x, S.bgm.y, S.width, S.bgm.height, theme.radii.panel, bgmProgress);
+      UI.label(ctx, '背景音乐', S.labelX, S.bgm.y + 27, {
+        size: 21, color: C.primaryText, bold: true
+      });
+      UI.label(ctx, '当前：' + bgmName, S.labelX, S.bgm.y + 53, {
+        size: F.detail, color: C.secondaryText, maxWidth: summaryWidth
+      });
+      this.drawSettingsAsset(ctx, 'iconMusic', S.skinIcon.x,
+        S.bgm.y + (S.bgm.height - S.skinIcon.size) / 2, S.skinIcon.size, '♪');
+    });
+    this.addHitArea(S.x, S.bgm.y, S.width, S.bgm.height, bgmAction);
+
     const settings = soundSettings || {
       music: { volume: 50, muted: false }, effects: { volume: 100, muted: false }
     };
-    this.drawVolumeSetting(ctx, '游戏音乐', 'music', settings.music, S.music);
-    this.drawVolumeSetting(ctx, '游戏音效', 'effects', settings.effects, S.effects);
+    this.drawVolumeSetting(ctx, '音乐音量', 'music', settings.music, S.music);
+    this.drawVolumeSetting(ctx, '音效音量', 'effects', settings.effects, S.effects);
+  }
+
+  /** 音乐选择页：只提供随机及四首固定歌曲，不提供播放控制按钮。 */
+  drawBgmSelection(ctx, mode) {
+    const back = this.layout.icons.back;
+    this.drawIconButton(ctx, 'back', back.x, back.y, back.width, back.height,
+      { type: 'CLOSE_BGM' });
+    const B = this.layout.bgm;
+    UI.label(ctx, '背景音乐', 187.5, B.titleY, {
+      size: 28, bold: true, color: C.primaryText, align: 'center'
+    });
+    const items = [{ id: 'random', name: '随机' }].concat(PLAYLIST);
+    items.forEach((song, index) => {
+      const y = B.y + index * (B.rowHeight + B.rowGap);
+      const selected = (mode || 'random') === song.id;
+      const action = { type: 'SELECT_BGM', id: song.id };
+      const progress = this.pressProgress(action);
+      UI.withPress(ctx, B.x, y, B.width, B.rowHeight, progress, 'card', () => {
+        roundedRect(ctx, B.x, y, B.width, B.rowHeight, 14,
+          selected ? C.surfaceRaised : C.surface,
+          selected ? C.accent : C.border);
+        UI.pressTint(ctx, B.x, y, B.width, B.rowHeight, 14, progress);
+        UI.label(ctx, song.name, B.x + 20, y + B.rowHeight / 2, {
+          size: 18, bold: selected, color: C.primaryText, maxWidth: 246
+        });
+        UI.label(ctx, selected ? '✓' : '○', B.x + B.width - 21, y + B.rowHeight / 2, {
+          size: 20, bold: selected, color: selected ? C.accent : C.secondaryText,
+          align: 'right'
+        });
+      });
+      this.addHitArea(B.x, y, B.width, B.rowHeight, action);
+    });
   }
 
   drawSettingsAsset(ctx, key, x, y, size, fallback) {
@@ -239,9 +313,6 @@ class CanvasRenderer {
     UI.label(ctx, '选择皮肤', 187.5, 66, {
       size: 28, color: C.primaryText, bold: true, align: 'center'
     });
-    UI.label(ctx, '选择后即刻生效，重新进入也会保留', 187.5, 101, {
-      size: F.detail, color: C.secondaryText, align: 'center'
-    });
 
     const S = this.layout.skins;
     SKINS.forEach((skin, index) => {
@@ -278,9 +349,6 @@ class CanvasRenderer {
         });
       });
       this.addHitArea(x, y, S.width, S.rowHeight, action);
-    });
-    UI.label(ctx, '背景与按钮、文字配色将一起切换', 187.5, S.footerY, {
-      size: F.note, color: C.secondaryText, align: 'center'
     });
   }
 
@@ -526,20 +594,6 @@ class CanvasRenderer {
       }
     }
     return null;
-  }
-
-  /** 兼容原有调用方：hitTest 仍返回 action 而非 UI 目标信息。 */
-  hitTest(x, y) {
-    const area = this.hitTestTarget(x, y);
-    if (!area) return null;
-    const action = area.action;
-    if (action.type === 'SET_VOLUME') {
-      return Object.assign({}, action, {
-        value: Math.max(0, Math.min(100,
-          Math.round((x - action.trackX) * 100 / action.trackWidth)))
-      });
-    }
-    return action;
   }
 }
 
