@@ -109,14 +109,14 @@ const theme = {
     // 额外向画布外延伸 30px 的手腕，抵消全面屏安全区的上下留白。
     hand: { x: 70, y: -30, width: 225, height: 305, enterY: 340 },
     playerHand: { x: 70, bottomY: 750, width: 225, height: 305, enterY: 340 },
-    // 中央预留给电脑喊码、比分、每码结果；右上角保留出码记录入口。
-    call: { x: 187.5, labelY: 291, numberY: 321 },
-    history: { x: 314, y: 20, width: 42, height: 42, labelY: 79 },
+    // 中央预留给电脑喊码、比分、每码结果；出码记录位于右侧喊码选项下方。
+    call: { x: 187.5, labelY: 280, numberY: 321 },
+    history: { x: 314, y: 459, width: 42, height: 42, labelY: 519 },
     scoreY: 360,
     detailY: 384,
     outcomeY: 408,
     picking: {
-      // 左侧一列：0～5；右侧两列：0～10。
+      // 左侧一列：出拳 0～5；右侧两列：喊码 0～10（跳过 5，共五行）。
       fist: { x: 14, y: 163, width: 46, height: 46, rowGap: 9, labelX: 14, labelY: 139 },
       call: { x: 276, y: 163, width: 43, height: 46, columnGap: 7, rowGap: 9,
         labelX: 322, labelY: 139 }

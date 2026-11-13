@@ -3,6 +3,7 @@ const GameModel = require('./core/game-model');
 const Viewport = require('./renderer/viewport');
 const CanvasRenderer = require('./renderer/canvas-renderer');
 const TouchController = require('./input/touch-controller');
+const PressFeedback = require('./input/press-feedback');
 const ImageLoader = require('./media/image-loader');
 const AudioManager = require('./media/audio-manager');
 const RevealAnimator = require('./animation/reveal-animator');
@@ -35,12 +36,16 @@ class MiniGameApp {
     this.playerHandAnimating = false;
     this.previousPlayerFist = null;
     this.homeIntroAnimator = new HomeIntroAnimator(this.canvas);
-    this.renderer = new CanvasRenderer(this.canvas, this.viewport, this.images);
+    this.pressFeedback = new PressFeedback(this.canvas, () => {
+      if (this.mounted) this.render();
+    });
+    this.renderer = new CanvasRenderer(this.canvas, this.viewport, this.images, this.pressFeedback);
     this.touch = new TouchController(
       wxApi,
       this.viewport,
-      (x, y) => this.renderer.hitTest(x, y),
-      (action) => this.dispatch(action)
+      (x, y) => this.renderer.hitTestTarget(x, y),
+      (action) => this.dispatch(action),
+      (id) => this.pressFeedback.setPressed(id)
     );
     // 可注入定时器，便于在不等待真实时间的情况下测试自动下一轮。
     this.schedule = opts.setTimeout || setTimeout;
@@ -316,6 +321,7 @@ class MiniGameApp {
     this.stopPlayerHandAnimation();
     this.homeIntroAnimator.stop();
     this.touch.unmount();
+    this.pressFeedback.clear();
     this.audio.destroy();
     if (typeof this.wxApi.offWindowResize === 'function') {
       this.wxApi.offWindowResize(this.handleResize);

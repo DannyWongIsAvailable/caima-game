@@ -62,16 +62,21 @@ function paginate(ctx, content, maxWidth) {
   return pages;
 }
 
-function drawButton(ctx, label, x, y, width, height, action, addHitArea) {
-  roundedRect(ctx, x, y, width, height, 10, action ? C.accent : C.disabledSurface);
-  UI.label(ctx, label, x + width / 2, y + height / 2, {
-    size: 16, bold: true, color: action ? C.accentText : C.disabledText, align: 'center'
+function drawButton(ctx, label, x, y, width, height, action, addHitArea, pressProgress) {
+  const target = action ? { type: action } : null;
+  const progress = target ? pressProgress(target) : 0;
+  UI.withPress(ctx, x, y, width, height, progress, 'button', () => {
+    roundedRect(ctx, x, y, width, height, 10, action ? C.accent : C.disabledSurface);
+    UI.pressTint(ctx, x, y, width, height, 10, progress);
+    UI.label(ctx, label, x + width / 2, y + height / 2, {
+      size: 16, bold: true, color: action ? C.accentText : C.disabledText, align: 'center'
+    });
   });
-  if (action) addHitArea(x, y, width, height, { type: action });
+  if (target) addHitArea(x, y, width, height, target);
 }
 
 /** 通用文字弹窗：标题/内容可替换，自动分页，统一提供关闭与翻页点击区。 */
-function drawPagedDialog(ctx, options, addHitArea) {
+function drawPagedDialog(ctx, options, addHitArea, getPressProgress) {
   const { title, content, requestedPage } = options;
   ctx.save();
   ctx.fillStyle = 'rgba(0, 0, 0, 0.70)';
@@ -93,26 +98,31 @@ function drawPagedDialog(ctx, options, addHitArea) {
   });
 
   // 仅通过右上角 × 关闭；背景不响应事件。
+  const pressProgress = getPressProgress || (() => 0);
+  const closeAction = { type: 'CLOSE_DIALOG' };
   const closeX = 309;
   const closeY = 120;
-  ctx.beginPath();
-  ctx.strokeStyle = C.secondaryText;
-  ctx.lineWidth = 2.5;
-  ctx.lineCap = 'round';
-  ctx.moveTo(closeX + 7, closeY + 7);
-  ctx.lineTo(closeX + 21, closeY + 21);
-  ctx.moveTo(closeX + 21, closeY + 7);
-  ctx.lineTo(closeX + 7, closeY + 21);
-  ctx.stroke();
-  addHitArea(closeX - 4, closeY - 4, 36, 36, { type: 'CLOSE_DIALOG' });
+  UI.withPress(ctx, closeX - 4, closeY - 4, 36, 36,
+    pressProgress(closeAction), 'icon', () => {
+      ctx.beginPath();
+      ctx.strokeStyle = C.secondaryText;
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.moveTo(closeX + 7, closeY + 7);
+      ctx.lineTo(closeX + 21, closeY + 21);
+      ctx.moveTo(closeX + 21, closeY + 7);
+      ctx.lineTo(closeX + 7, closeY + 21);
+      ctx.stroke();
+    });
+  addHitArea(closeX - 4, closeY - 4, 36, 36, closeAction);
 
   if (pages.length > 1) {
     UI.label(ctx, (page + 1) + ' / ' + pages.length, 187.5, 553, {
       size: F.note, color: C.secondaryText, align: 'center'
     });
-    drawButton(ctx, '上一页', 43, 571, 86, 40, page > 0 ? 'DIALOG_PREV' : null, addHitArea);
+    drawButton(ctx, '上一页', 43, 571, 86, 40, page > 0 ? 'DIALOG_PREV' : null, addHitArea, pressProgress);
     drawButton(ctx, '下一页', 246, 571, 86, 40,
-        page < pages.length - 1 ? 'DIALOG_NEXT' : null, addHitArea);
+        page < pages.length - 1 ? 'DIALOG_NEXT' : null, addHitArea, pressProgress);
   }
   ctx.restore();
 }

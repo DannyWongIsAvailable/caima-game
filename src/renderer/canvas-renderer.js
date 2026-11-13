@@ -15,17 +15,23 @@ const L = theme.gameLayout;
  * 样式：src/theme/tokens.js；组件：src/renderer/ui-components.js。
  */
 class CanvasRenderer {
-  constructor(canvas, viewport, images) {
+  constructor(canvas, viewport, images, pressFeedback) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     if (!this.ctx) throw new Error('无法获取 Canvas 2D 绘图上下文');
     this.viewport = viewport;
     this.images = images;
+    this.pressFeedback = pressFeedback || null;
+    this.scope = null;
     this.hitAreas = [];
   }
 
   render(model, revealProgress, isAnimating, previousAiFist, viewPage, skinId, homeIntro, dialog, soundSettings, playerHandAnimation) {
     this.hitAreas = [];
+    // 场景及弹窗切换时同步清理按下状态，稳定键包含场景域。
+    this.scope = dialog ? 'dialog:' + dialog.type + ':' + model.phase
+      : model.phase === 'home' ? 'home:' + viewPage : 'game:' + model.phase;
+    if (this.pressFeedback) this.pressFeedback.setScope(this.scope);
     const ctx = this.ctx;
     ctx.save();
     this.viewport.useFullScreen(ctx);
@@ -43,11 +49,13 @@ class CanvasRenderer {
       if (dialog.type === 'rules' && model.phase === 'home') {
         drawPagedDialog(ctx, {
           title: '玩法说明', content: CONFIG.RULES_TEXT, requestedPage: dialog.page
-        }, (x, y, width, height, action) => this.addHitArea(x, y, width, height, action));
+        }, (x, y, width, height, action) => this.addHitArea(x, y, width, height, action),
+          (action) => this.pressProgress(action));
       } else if (dialog.type === 'history' && model.phase !== 'home') {
         drawPagedDialog(ctx, {
           title: '本局出码记录', content: this.formatHistory(model.history), requestedPage: dialog.page
-        }, (x, y, width, height, action) => this.addHitArea(x, y, width, height, action));
+        }, (x, y, width, height, action) => this.addHitArea(x, y, width, height, action),
+          (action) => this.pressProgress(action));
       }
     }
     ctx.restore();
@@ -145,13 +153,18 @@ class CanvasRenderer {
       size: F.detail, color: C.secondaryText, align: 'center'
     });
 
-    UI.panel(ctx, S.x, S.skin.y, S.width, S.skin.height);
-    UI.label(ctx, '更换皮肤', S.labelX, S.skin.y + S.skin.height / 2, {
-      size: 21, color: C.primaryText, bold: true
+    const skinAction = { type: 'OPEN_SKINS' };
+    const skinProgress = this.pressProgress(skinAction);
+    UI.withPress(ctx, S.x, S.skin.y, S.width, S.skin.height, skinProgress, 'card', () => {
+      UI.panel(ctx, S.x, S.skin.y, S.width, S.skin.height);
+      UI.pressTint(ctx, S.x, S.skin.y, S.width, S.skin.height, theme.radii.panel, skinProgress);
+      UI.label(ctx, '更换皮肤', S.labelX, S.skin.y + S.skin.height / 2, {
+        size: 21, color: C.primaryText, bold: true
+      });
+      this.drawSettingsAsset(ctx, 'iconSkin', S.skinIcon.x,
+        S.skin.y + (S.skin.height - S.skinIcon.size) / 2, S.skinIcon.size, '▣');
     });
-    this.drawSettingsAsset(ctx, 'iconSkin', S.skinIcon.x,
-      S.skin.y + (S.skin.height - S.skinIcon.size) / 2, S.skinIcon.size, '▣');
-    this.addHitArea(S.x, S.skin.y, S.width, S.skin.height, { type: 'OPEN_SKINS' });
+    this.addHitArea(S.x, S.skin.y, S.width, S.skin.height, skinAction);
 
     const settings = soundSettings || {
       music: { volume: 50, muted: false }, effects: { volume: 100, muted: false }
@@ -181,12 +194,18 @@ class CanvasRenderer {
     });
 
     const iconY = layout.y + S.track.offsetY - S.audioIcon.size / 2;
-    this.drawSettingsAsset(ctx, iconKey, S.audioIcon.x, iconY, S.audioIcon.size,
-      setting.muted ? '×' : volume === 0 ? '○' : '♪');
+    const muteAction = { type: 'TOGGLE_VOLUME_MUTE', channel };
+    UI.withPress(ctx, S.audioIcon.x, iconY, S.audioIcon.size, S.audioIcon.size,
+      this.pressProgress(muteAction), 'icon', () => {
+        this.drawSettingsAsset(ctx, iconKey, S.audioIcon.x, iconY, S.audioIcon.size,
+          setting.muted ? '×' : volume === 0 ? '○' : '♪');
+      });
     this.addHitArea(S.audioIcon.x, iconY,
-      S.audioIcon.size, S.audioIcon.size, { type: 'TOGGLE_VOLUME_MUTE', channel });
+      S.audioIcon.size, S.audioIcon.size, muteAction);
 
     const track = S.track;
+    const sliderAction = { type: 'SET_VOLUME', channel, trackX: track.x, trackWidth: track.width };
+    const sliderProgress = this.pressProgress(sliderAction);
     const trackY = layout.y + track.offsetY;
     roundedRect(ctx, track.x, trackY - 4, track.width, 8, 4, C.surfaceMuted);
     if (volume > 0) {
@@ -195,7 +214,7 @@ class CanvasRenderer {
     }
     const thumbX = track.x + track.width * volume / 100;
     ctx.beginPath();
-    ctx.arc(thumbX, trackY, 10, 0, Math.PI * 2);
+    ctx.arc(thumbX, trackY, 10 + 2.5 * sliderProgress, 0, Math.PI * 2);
     ctx.fillStyle = C.accent;
     ctx.fill();
     ctx.lineWidth = 2;
@@ -205,8 +224,7 @@ class CanvasRenderer {
       size: 15, color: C.primaryText, align: 'right'
     });
     // 可点击轨道，也可在触摸移动时持续更新；轨道两端可准确达到 0%/100%。
-    this.addHitArea(track.x - 12, trackY - 22, track.width + 24, 44,
-      { type: 'SET_VOLUME', channel, trackX: track.x, trackWidth: track.width });
+    this.addHitArea(track.x - 12, trackY - 22, track.width + 24, 44, sliderAction);
   }
 
   /** 皮肤选择页：只更换视觉资源，不影响比分和出码规则。 */
@@ -226,32 +244,36 @@ class CanvasRenderer {
       const x = S.x;
       const y = S.y + index * (S.rowHeight + S.rowGap);
       const selected = skin.id === activeId;
-      roundedRect(ctx, x, y, S.width, S.rowHeight, 14,
-        selected ? C.surfaceRaised : C.surface,
-        selected ? C.accent : C.border);
-      const thumbnail = this.images.get('skinPreview_' + skin.id);
-      const py = y + (S.rowHeight - S.previewHeight) / 2;
-      if (thumbnail) {
-        ctx.drawImage(thumbnail, S.previewX, py, S.previewWidth, S.previewHeight);
-      } else {
-        roundedRect(ctx, S.previewX, py, S.previewWidth, S.previewHeight, 6, skin.swatches[0]);
-      }
-      UI.label(ctx, skin.name, S.textX, y + 23, {
-        size: 18, bold: true, color: C.primaryText
+      const action = { type: 'SELECT_SKIN', id: skin.id };
+      const progress = this.pressProgress(action);
+      UI.withPress(ctx, x, y, S.width, S.rowHeight, progress, 'card', () => {
+        roundedRect(ctx, x, y, S.width, S.rowHeight, 14,
+          selected ? C.surfaceRaised : C.surface,
+          selected ? C.accent : C.border);
+        UI.pressTint(ctx, x, y, S.width, S.rowHeight, 14, progress);
+        const thumbnail = this.images.get('skinPreview_' + skin.id);
+        const py = y + (S.rowHeight - S.previewHeight) / 2;
+        if (thumbnail) {
+          ctx.drawImage(thumbnail, S.previewX, py, S.previewWidth, S.previewHeight);
+        } else {
+          roundedRect(ctx, S.previewX, py, S.previewWidth, S.previewHeight, 6, skin.swatches[0]);
+        }
+        UI.label(ctx, skin.name, S.textX, y + 23, {
+          size: 18, bold: true, color: C.primaryText
+        });
+        UI.label(ctx, skin.subtitle, S.textX, y + 45, {
+          size: F.note, color: C.secondaryText
+        });
+        skin.swatches.forEach((color, i) => {
+          roundedRect(ctx, S.textX + i * 27, y + 62, 21, 10, 3, color);
+        });
+        UI.label(ctx, selected ? '✓ 当前' : '选择', 320, y + 23, {
+          size: F.note,
+          color: selected ? (C.selectedIndicator || C.accent) : C.secondaryText,
+          bold: selected, align: 'right'
+        });
       });
-      UI.label(ctx, skin.subtitle, S.textX, y + 45, {
-        size: F.note, color: C.secondaryText
-      });
-      skin.swatches.forEach((color, i) => {
-        roundedRect(ctx, S.textX + i * 27, y + 62, 21, 10, 3, color);
-      });
-      UI.label(ctx, selected ? '✓ 当前' : '选择', 320, y + 23, {
-        size: F.note,
-        color: selected ? (C.selectedIndicator || C.accent) : C.secondaryText,
-        bold: selected, align: 'right'
-      });
-      this.addHitArea(x, y, S.width, S.rowHeight,
-        { type: 'SELECT_SKIN', id: skin.id });
+      this.addHitArea(x, y, S.width, S.rowHeight, action);
     });
     UI.label(ctx, '背景与按钮、文字配色将一起切换', 187.5, S.footerY, {
       size: F.note, color: C.secondaryText, align: 'center'
@@ -321,7 +343,8 @@ class CanvasRenderer {
 
   drawIconButton(ctx, name, x, y, width, height, action, imageKey) {
     const key = imageKey || { rules: 'iconRule', settings: 'iconSettings', back: 'iconBack', home: 'iconHome' }[name];
-    UI.iconButton(ctx, name, this.images.get(key), x, y, width, height);
+    UI.iconButton(ctx, name, this.images.get(key), x, y, width, height,
+      { pressProgress: this.pressProgress(action) });
     if (action) this.addHitArea(x, y, width, height, action);
   }
 
@@ -438,13 +461,17 @@ class CanvasRenderer {
         picking ? { type: 'FIST', value: i } : null, !picking);
     }
 
-    // 右侧两列，从左到右、从上到下依次排列 0～10。
+    // 右侧两列按列优先排列：左列 0～4，右列 6～10（禁止喊 5）。
     UI.label(ctx, '你的喊码', p.call.labelX, p.call.labelY, {
       size: F.miniLabel, color: C.secondaryText, align: 'center'
     });
-    for (let n = 0; n <= 10; n += 1) {
-      const x = p.call.x + (n % 2) * (p.call.width + p.call.columnGap);
-      const y = p.call.y + Math.floor(n / 2) * (p.call.height + p.call.rowGap);
+    for (let n = CONFIG.PLAYER_CALL_MIN; n <= CONFIG.PLAYER_CALL_MAX; n += 1) {
+      if (n === CONFIG.FORBIDDEN_CALL) continue;
+      const column = n < CONFIG.FORBIDDEN_CALL ? 0 : 1;
+      const row = n < CONFIG.FORBIDDEN_CALL
+        ? n - CONFIG.PLAYER_CALL_MIN : n - CONFIG.FORBIDDEN_CALL - 1;
+      const x = p.call.x + column * (p.call.width + p.call.columnGap);
+      const y = p.call.y + row * (p.call.height + p.call.rowGap);
       const available = picking && fistSelected;
       this.drawPickButton(ctx, String(n), x, y, p.call.width, p.call.height,
         model.player.call === n,
@@ -453,33 +480,58 @@ class CanvasRenderer {
   }
 
   drawPickButton(ctx, value, x, y, width, height, selected, action, disabled) {
-    UI.button(ctx, value, x, y, width, height, { selected, disabled });
+    UI.button(ctx, value, x, y, width, height,
+      { selected, disabled, pressProgress: this.pressProgress(action) });
     if (action) this.addHitArea(x, y, width, height, action);
   }
 
   drawActionButton(ctx, value, x, y, width, height, action) {
-    UI.button(ctx, value, x, y, width, height, { primary: true, disabled: !action });
+    UI.button(ctx, value, x, y, width, height,
+      { primary: true, disabled: !action, pressProgress: this.pressProgress(action) });
     if (action) this.addHitArea(x, y, width, height, action);
   }
 
-  addHitArea(x, y, width, height, action) {
-    this.hitAreas.push({ x, y, width, height, action });
+  /** action.id 是业务皮肤 ID，不可直接当作 UI 目标 ID；加入类型及场景避免重名。 */
+  targetId(action) {
+    if (!action) return null;
+    return this.scope + ':' + action.type + ':' +
+      (action.id == null ? '' : String(action.id)) + ':' +
+      (action.value == null ? '' : String(action.value)) + ':' +
+      (action.channel == null ? '' : String(action.channel));
   }
 
-  hitTest(x, y) {
+  pressProgress(action) {
+    return this.pressFeedback && action
+      ? this.pressFeedback.getProgress(this.targetId(action)) : 0;
+  }
+
+  addHitArea(x, y, width, height, action) {
+    if (!action) return;
+    this.hitAreas.push({ id: this.targetId(action), x, y, width, height, action });
+  }
+
+  hitTestTarget(x, y) {
     for (let i = this.hitAreas.length - 1; i >= 0; i -= 1) {
       const area = this.hitAreas[i];
       if (x >= area.x && x <= area.x + area.width && y >= area.y && y <= area.y + area.height) {
-        if (area.action.type === 'SET_VOLUME') {
-          return Object.assign({}, area.action, {
-            value: Math.max(0, Math.min(100,
-              Math.round((x - area.action.trackX) * 100 / area.action.trackWidth)))
-          });
-        }
-        return area.action;
+        return area;
       }
     }
     return null;
+  }
+
+  /** 兼容原有调用方：hitTest 仍返回 action 而非 UI 目标信息。 */
+  hitTest(x, y) {
+    const area = this.hitTestTarget(x, y);
+    if (!area) return null;
+    const action = area.action;
+    if (action.type === 'SET_VOLUME') {
+      return Object.assign({}, action, {
+        value: Math.max(0, Math.min(100,
+          Math.round((x - action.trackX) * 100 / action.trackWidth)))
+      });
+    }
+    return action;
   }
 }
 
