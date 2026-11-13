@@ -107,7 +107,7 @@ const theme = {
   // 375 × 720；手部 PNG 自带透明边，按原比例显示，避免变形。
   gameLayout: {
     // 额外向画布外延伸 30px 的手腕，抵消全面屏安全区的上下留白。
-    hand: { x: 70, y: -30, width: 225, height: 305, enterY: 340 },
+    hand: { x: 70, y: 0, width: 225, height: 305, enterY: 340 },
     playerHand: { x: 70, bottomY: 750, width: 225, height: 305, enterY: 340 },
     // 中央预留给电脑喊码、比分、每码结果；出码记录位于右侧喊码选项下方。
     call: { x: 187.5, labelY: 280, numberY: 321 },

@@ -12,15 +12,15 @@ const L = theme.gameLayout;
  * 电脑保持原方向（顶部贴边），玩家旋转 180°（底部贴边）。
  * 所有素材等比缩放；动画仅平移，不改变边界锚点和手势比例。
  */
-function drawHand(ctx, images, fist, animation) {
-  drawAnimatedHand(ctx, images, fist, L.hand, false, animation);
+function drawHand(ctx, images, fist, animation, bounds) {
+  drawAnimatedHand(ctx, images, fist, bounds || L.hand, false, animation);
   const opts = animation || {};
   const p = Math.max(0, Math.min(1, opts.progress == null ? 1 : opts.progress));
-  if (opts.isAnimating && p > 0) drawOptionalRevealSprite(ctx, images, p);
+  if (opts.isAnimating && p > 0) drawOptionalRevealSprite(ctx, images, p, bounds || L.hand);
 }
 
-function drawPlayerHand(ctx, images, fist, animation) {
-  drawAnimatedHand(ctx, images, fist, L.playerHand, true, animation);
+function drawPlayerHand(ctx, images, fist, animation, bounds) {
+  drawAnimatedHand(ctx, images, fist, bounds || L.playerHand, true, animation);
 }
 
 function drawAnimatedHand(ctx, images, fist, bounds, fromBottom, animation) {
@@ -93,7 +93,7 @@ function drawFallbackHand(ctx, fist, x, y, width, height, fromBottom) {
     { size: F.handFallback, bold: true, color: C.accent, align: 'center' });
 }
 
-function drawOptionalRevealSprite(ctx, images, progress) {
+function drawOptionalRevealSprite(ctx, images, progress, handBounds) {
   const image = images.get('revealStrip');
   if (!image) return;
   const frames = Math.max(1, manifest.images.revealStrip.frames || 8);
@@ -102,7 +102,8 @@ function drawOptionalRevealSprite(ctx, images, progress) {
   ctx.save();
   ctx.globalAlpha = progress * 0.8;
   // 可选粒子特效放在中间上方，不覆盖两侧数字按钮。
-  ctx.drawImage(image, frame * width, 0, width, image.height, 208, 260, 42, 42);
+  ctx.drawImage(image, frame * width, 0, width, image.height,
+    handBounds.x + handBounds.width * 0.63, handBounds.y + handBounds.height * 0.92, 42, 42);
   ctx.restore();
 }
 

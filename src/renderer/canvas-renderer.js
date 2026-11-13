@@ -5,10 +5,10 @@ const { SKINS } = require('../theme/skins');
 const UI = require('./ui-components');
 const { drawHand, drawPlayerHand } = require('./ai-hand');
 const drawPagedDialog = require('./paged-dialog');
+const createResponsiveLayout = require('./responsive-layout');
 
 const C = theme.colors;
 const F = theme.typography;
-const L = theme.gameLayout;
 
 /**
  * 只负责绘制和点击区域，不参与游戏判定/自动推进。
@@ -24,9 +24,11 @@ class CanvasRenderer {
     this.pressFeedback = pressFeedback || null;
     this.scope = null;
     this.hitAreas = [];
+    this.layout = createResponsiveLayout(viewport);
   }
 
   render(model, revealProgress, isAnimating, previousAiFist, viewPage, skinId, homeIntro, dialog, soundSettings, playerHandAnimation) {
+    this.layout = createResponsiveLayout(this.viewport);
     this.hitAreas = [];
     // 场景及弹窗切换时同步清理按下状态，稳定键包含场景域。
     this.scope = dialog ? 'dialog:' + dialog.type + ':' + model.phase
@@ -48,12 +50,14 @@ class CanvasRenderer {
       this.hitAreas = [];
       if (dialog.type === 'rules' && model.phase === 'home') {
         drawPagedDialog(ctx, {
-          title: '玩法说明', content: CONFIG.RULES_TEXT, requestedPage: dialog.page
+          title: '玩法说明', content: CONFIG.RULES_TEXT, requestedPage: dialog.page,
+          layout: this.layout.dialog
         }, (x, y, width, height, action) => this.addHitArea(x, y, width, height, action),
           (action) => this.pressProgress(action));
       } else if (dialog.type === 'history' && model.phase !== 'home') {
         drawPagedDialog(ctx, {
-          title: '本局出码记录', content: this.formatHistory(model.history), requestedPage: dialog.page
+          title: '本局出码记录', content: this.formatHistory(model.history), requestedPage: dialog.page,
+          layout: this.layout.dialog
         }, (x, y, width, height, action) => this.addHitArea(x, y, width, height, action),
           (action) => this.pressProgress(action));
       }
@@ -93,7 +97,7 @@ class CanvasRenderer {
 
   /** 首页：标题渐入、人物侧滑探身、随后出现对话气泡。 */
   drawHome(ctx, intro) {
-    const home = theme.homeLayout;
+    const home = this.layout.home;
     const state = this.resolveHomeIntro(intro);
 
     const titleY = home.title.y - 14 * (1 - state.title);
@@ -141,11 +145,11 @@ class CanvasRenderer {
 
   /** 设置页中的音量状态仅用于 UI 展示，不影响实际音频。 */
   drawSettings(ctx, soundSettings) {
-    const back = theme.iconLayout.back;
+    const back = this.layout.icons.back;
     this.drawIconButton(ctx, 'back', back.x, back.y, back.width, back.height,
       { type: 'CLOSE_SETTINGS' });
 
-    const S = theme.settingsLayout;
+    const S = this.layout.settings;
     UI.label(ctx, '游戏设置', 187.5, S.titleY, {
       size: 29, bold: true, color: C.primaryText, align: 'center'
     });
@@ -185,7 +189,7 @@ class CanvasRenderer {
   }
 
   drawVolumeSetting(ctx, title, channel, setting, layout) {
-    const S = theme.settingsLayout;
+    const S = this.layout.settings;
     const volume = Math.max(0, Math.min(100, Math.round(setting.volume)));
     const iconKey = setting.muted ? 'iconMute' : volume === 0 ? 'iconNoAudio' : 'iconAudio';
     UI.panel(ctx, S.x, layout.y, S.width, layout.height);
@@ -229,7 +233,7 @@ class CanvasRenderer {
 
   /** 皮肤选择页：只更换视觉资源，不影响比分和出码规则。 */
   drawSkins(ctx, activeId) {
-    const back = theme.iconLayout.back;
+    const back = this.layout.icons.back;
     this.drawIconButton(ctx, 'back', back.x, back.y, back.width, back.height,
       { type: 'CLOSE_SKINS' });
     UI.label(ctx, '选择皮肤', 187.5, 66, {
@@ -239,7 +243,7 @@ class CanvasRenderer {
       size: F.detail, color: C.secondaryText, align: 'center'
     });
 
-    const S = theme.skinLayout;
+    const S = this.layout.skins;
     SKINS.forEach((skin, index) => {
       const x = S.x;
       const y = S.y + index * (S.rowHeight + S.rowGap);
@@ -304,7 +308,7 @@ class CanvasRenderer {
   drawHomeCharacter(ctx, progress) {
     const image = this.images.get('homeMan');
     if (!image || progress <= 0) return;
-    const layout = theme.homeLayout.character;
+    const layout = this.layout.home.character;
     // 使用实际图片尺寸：用户提供的 509×571 PNG 不被拉伸。
     const width = layout.width;
     const height = width * ((image.height || 571) / (image.width || 509));
@@ -318,7 +322,7 @@ class CanvasRenderer {
 
   drawHomeBubble(ctx, progress) {
     if (progress <= 0) return;
-    const layout = theme.homeLayout.bubble;
+    const layout = this.layout.home.bubble;
     const x = layout.x;
     const y = layout.y + (1 - progress) * 8;
     const width = layout.width;
@@ -349,6 +353,7 @@ class CanvasRenderer {
   }
 
   drawGame(ctx, model, revealProgress, isAnimating, previousAiFist, playerHandAnimation) {
+    const L = this.layout.game;
     const result = model.lastResult;
     // 图层顺序：上下手势 → 中间信息 → 两侧操作区和图标；保证按钮清晰可点。
     this.drawAiArea(ctx, result, {
@@ -373,13 +378,14 @@ class CanvasRenderer {
     } else {
       this.drawPickingControls(ctx, model);
     }
-    const home = theme.iconLayout.home;
+    const home = this.layout.icons.home;
     this.drawIconButton(ctx, 'home', home.x, home.y, home.width, home.height,
       { type: 'RETURN_HOME' });
   }
 
   drawAiArea(ctx, result, animation) {
-    drawHand(ctx, this.images, result ? result.ai.fist : null, animation);
+    const L = this.layout.game;
+    drawHand(ctx, this.images, result ? result.ai.fist : null, animation, L.hand);
     UI.label(ctx, '电脑喊码', L.call.x, L.call.labelY, {
       size: F.miniLabel, color: C.secondaryText, align: 'center'
     });
@@ -395,15 +401,17 @@ class CanvasRenderer {
   }
 
   drawPlayerArea(ctx, model, animation) {
+    const L = this.layout.game;
     // 玩家只是选择数字时不切换手势；正式出码后 lastResult 才更新。
     // 首轮未出码前，保留半透明握拳待机姿势。
     const fist = model.lastResult ? model.lastResult.player.fist : 0;
     drawPlayerHand(ctx, this.images, fist, Object.assign({
       neutral: !model.lastResult
-    }, animation || {}));
+    }, animation || {}), L.playerHand);
   }
 
   drawGameText(ctx, model) {
+    const L = this.layout.game;
     UI.label(ctx,
       '你 ' + model.score.player + ' : ' + model.score.ai + ' 电脑  ·  第 ' + model.roundNumber + ' 码',
       187.5, L.scoreY, {
@@ -446,7 +454,7 @@ class CanvasRenderer {
   }
 
   drawPickingControls(ctx, model) {
-    const p = L.picking;
+    const p = this.layout.game.picking;
     const picking = model.phase === 'picking';
     const fistSelected = model.player.fist !== null;
 

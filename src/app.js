@@ -58,6 +58,9 @@ class MiniGameApp {
     this.previousAiFist = null;
     this.mounted = false;
     this.handleResize = () => {
+      // 尺寸变化会改变触摸坐标映射，取消旧手势避免误触。
+      this.touch.reset();
+      this.pressFeedback.clear();
       this.viewport.update();
       this.render();
     };

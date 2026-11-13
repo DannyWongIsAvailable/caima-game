@@ -78,21 +78,24 @@ function drawButton(ctx, label, x, y, width, height, action, addHitArea, pressPr
 /** 通用文字弹窗：标题/内容可替换，自动分页，统一提供关闭与翻页点击区。 */
 function drawPagedDialog(ctx, options, addHitArea, getPressProgress) {
   const { title, content, requestedPage } = options;
+  const bounds = options.layout || DIALOG;
+  const shift = bounds.y - DIALOG.y;
   ctx.save();
   ctx.fillStyle = 'rgba(0, 0, 0, 0.70)';
-  ctx.fillRect(0, 0, CONFIG.DESIGN_WIDTH, CONFIG.DESIGN_HEIGHT);
-  roundedRect(ctx, DIALOG.x, DIALOG.y, DIALOG.width, DIALOG.height, 20, C.surface, C.border);
-  UI.label(ctx, title, 187.5, 145, {
+  ctx.fillRect(bounds.scrimX || 0, 0, bounds.scrimWidth || CONFIG.DESIGN_WIDTH,
+    bounds.scrimHeight || CONFIG.DESIGN_HEIGHT);
+  roundedRect(ctx, bounds.x, bounds.y, bounds.width, bounds.height, 20, C.surface, C.border);
+  UI.label(ctx, title, 187.5, 145 + shift, {
     size: 25, bold: true, color: C.primaryText, align: 'center'
   });
   ctx.fillStyle = C.divider;
-  ctx.fillRect(42, 175, 291, 1);
+  ctx.fillRect(42, 175 + shift, 291, 1);
 
   ctx.font = TEXT_SIZE + 'px ' + F.family;
-  const pages = paginate(ctx, content, DIALOG.width - 48);
+  const pages = paginate(ctx, content, bounds.width - 48);
   const page = Math.max(0, Math.min(pages.length - 1, requestedPage || 0));
   pages[page].forEach((line, index) => {
-    UI.label(ctx, line, TEXT_X, TEXT_Y + index * LINE_HEIGHT, {
+    UI.label(ctx, line, TEXT_X, TEXT_Y + shift + index * LINE_HEIGHT, {
       size: TEXT_SIZE, color: C.primaryText
     });
   });
@@ -101,7 +104,7 @@ function drawPagedDialog(ctx, options, addHitArea, getPressProgress) {
   const pressProgress = getPressProgress || (() => 0);
   const closeAction = { type: 'CLOSE_DIALOG' };
   const closeX = 309;
-  const closeY = 120;
+  const closeY = 120 + shift;
   UI.withPress(ctx, closeX - 4, closeY - 4, 36, 36,
     pressProgress(closeAction), 'icon', () => {
       ctx.beginPath();
@@ -117,11 +120,11 @@ function drawPagedDialog(ctx, options, addHitArea, getPressProgress) {
   addHitArea(closeX - 4, closeY - 4, 36, 36, closeAction);
 
   if (pages.length > 1) {
-    UI.label(ctx, (page + 1) + ' / ' + pages.length, 187.5, 553, {
+    UI.label(ctx, (page + 1) + ' / ' + pages.length, 187.5, 553 + shift, {
       size: F.note, color: C.secondaryText, align: 'center'
     });
-    drawButton(ctx, '上一页', 43, 571, 86, 40, page > 0 ? 'DIALOG_PREV' : null, addHitArea, pressProgress);
-    drawButton(ctx, '下一页', 246, 571, 86, 40,
+    drawButton(ctx, '上一页', 43, 571 + shift, 86, 40, page > 0 ? 'DIALOG_PREV' : null, addHitArea, pressProgress);
+    drawButton(ctx, '下一页', 246, 571 + shift, 86, 40,
         page < pages.length - 1 ? 'DIALOG_NEXT' : null, addHitArea, pressProgress);
   }
   ctx.restore();

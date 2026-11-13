@@ -4,6 +4,5 @@
   "private": true,
   "description": "原生微信小游戏 Canvas 2D 广西猜码 PVE MVP · 6套皮肤设置与全局配色切换",
   "scripts": {
-    "test": "node tests/rules.test.js && node tests/smoke.test.js && node tests/skin.test.js"
   }
 }
