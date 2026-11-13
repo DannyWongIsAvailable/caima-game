@@ -8,6 +8,7 @@ module.exports = {
   images: {
     // 导航图标始终启用，皮肤颜色变化不会改变图片本身。
     iconSettings: { src: 'assets/images/icons/settings.png', enabled: true },
+    iconBook: { src: 'assets/images/icons/book.png', enabled: true },
     iconRule: { src: 'assets/images/icons/rule.png', enabled: true },
     iconBack: { src: 'assets/images/icons/back.png', enabled: true },
     iconHome: { src: 'assets/images/icons/home.png', enabled: true },

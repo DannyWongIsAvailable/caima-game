@@ -92,11 +92,10 @@ const theme = {
     track: { x: 110, width: 148, offsetY: 85 },
     percentX: 326
   },
-  // 统一导航图标按钮与图标本身尺寸（画布设计坐标）。
+  // 导航图标按钮的绘制区域与图片区域一致（画布设计坐标）。
   iconLayout: {
     back: { x: 18, y: 16, width: 44, height: 44 },
-    home: { x: 12, y: 15, width: 44, height: 44 },
-    size: { rules: 37, settings: 37, back: 29, home: 29 }
+    home: { x: 12, y: 15, width: 44, height: 44 }
   },
   // 皮肤选择页：375 × 720 设计空间内最多展示六套皮肤，不需要滚动。
   skinLayout: {

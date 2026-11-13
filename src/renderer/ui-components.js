@@ -43,25 +43,19 @@ function button(ctx, value, x, y, width, height, options) {
   });
 }
 
-/** 导航与首页入口图标按钮：背景统一跟随当前皮肤，素材加载前使用简洁符号占位。 */
-function iconButton(ctx, name, image, x, y, width, height, options) {
-  const o = options || {};
-  const nav = !!o.nav;
-  roundedRect(ctx, x, y, width, height,
-    nav ? theme.radii.control : theme.radii.button,
-    nav ? (theme.colors.navSurface || theme.colors.surface)
-      : (theme.colors.buttonSurface || theme.colors.surfaceRaised),
-    theme.colors.border);
-  const size = theme.iconLayout.size[name] || 28;
-  const ix = x + (width - size) / 2;
-  const iy = y + (height - size) / 2;
+/** 图标按钮：PNG 的绘制矩形即按钮边界，不添加底板、描边或额外留白。 */
+function iconButton(ctx, name, image, x, y, width, height) {
   if (image) {
-    ctx.drawImage(image, ix, iy, size, size);
+    ctx.drawImage(image, x, y, width, height);
     return;
   }
+  // 仅在资源尚未加载时绘制文字占位；同样不添加额外按钮框。
   const fallback = { rules: '?', settings: '⚙', back: '←', home: '⌂' }[name] || '•';
   label(ctx, fallback, x + width / 2, y + height / 2, {
-    size: size, bold: true, color: theme.colors.buttonText || theme.colors.primaryText, align: 'center'
+    size: Math.round(Math.min(width, height) * 0.65),
+    bold: true,
+    color: theme.colors.buttonText || theme.colors.primaryText,
+    align: 'center'
   });
 }
 

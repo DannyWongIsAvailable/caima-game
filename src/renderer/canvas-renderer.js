@@ -103,8 +103,9 @@ class CanvasRenderer {
     this.drawActionButton(ctx, '开始游戏', start.x, start.y, start.width, start.height,
       { type: 'START' });
     const rules = home.rules;
+    // 首页玩法说明使用书本图标；对局出码记录仍使用原 rule.png。
     this.drawIconButton(ctx, 'rules', rules.x, rules.y, rules.width,
-      rules.height, { type: 'OPEN_RULES' });
+      rules.height, { type: 'OPEN_RULES' }, 'iconBook');
     const settings = home.settings;
     this.drawIconButton(ctx, 'settings', settings.x, settings.y, settings.width,
       settings.height, { type: 'OPEN_SETTINGS' });
@@ -133,7 +134,7 @@ class CanvasRenderer {
   drawSettings(ctx, soundSettings) {
     const back = theme.iconLayout.back;
     this.drawIconButton(ctx, 'back', back.x, back.y, back.width, back.height,
-      { type: 'CLOSE_SETTINGS' }, true);
+      { type: 'CLOSE_SETTINGS' });
 
     const S = theme.settingsLayout;
     UI.label(ctx, '游戏设置', 187.5, S.titleY, {
@@ -181,8 +182,8 @@ class CanvasRenderer {
     const iconY = layout.y + S.track.offsetY - S.audioIcon.size / 2;
     this.drawSettingsAsset(ctx, iconKey, S.audioIcon.x, iconY, S.audioIcon.size,
       setting.muted ? '×' : volume === 0 ? '○' : '♪');
-    this.addHitArea(S.audioIcon.x - 4, iconY - 4,
-      S.audioIcon.size + 8, S.audioIcon.size + 8, { type: 'TOGGLE_VOLUME_MUTE', channel });
+    this.addHitArea(S.audioIcon.x, iconY,
+      S.audioIcon.size, S.audioIcon.size, { type: 'TOGGLE_VOLUME_MUTE', channel });
 
     const track = S.track;
     const trackY = layout.y + track.offsetY;
@@ -211,7 +212,7 @@ class CanvasRenderer {
   drawSkins(ctx, activeId) {
     const back = theme.iconLayout.back;
     this.drawIconButton(ctx, 'back', back.x, back.y, back.width, back.height,
-      { type: 'CLOSE_SKINS' }, true);
+      { type: 'CLOSE_SKINS' });
     UI.label(ctx, '选择皮肤', 187.5, 66, {
       size: 28, color: C.primaryText, bold: true, align: 'center'
     });
@@ -317,9 +318,9 @@ class CanvasRenderer {
     ctx.restore();
   }
 
-  drawIconButton(ctx, name, x, y, width, height, action, nav) {
-    const key = { rules: 'iconRule', settings: 'iconSettings', back: 'iconBack', home: 'iconHome' }[name];
-    UI.iconButton(ctx, name, this.images.get(key), x, y, width, height, { nav: !!nav });
+  drawIconButton(ctx, name, x, y, width, height, action, imageKey) {
+    const key = imageKey || { rules: 'iconRule', settings: 'iconSettings', back: 'iconBack', home: 'iconHome' }[name];
+    UI.iconButton(ctx, name, this.images.get(key), x, y, width, height);
     if (action) this.addHitArea(x, y, width, height, action);
   }
 
@@ -351,7 +352,7 @@ class CanvasRenderer {
     // 顶部独立入口：动画/结算期间也始终能返回首页。
     const home = theme.iconLayout.home;
     this.drawIconButton(ctx, 'home', home.x, home.y, home.width, home.height,
-      { type: 'RETURN_HOME' }, true);
+      { type: 'RETURN_HOME' });
   }
 
   drawAiArea(ctx, result, animation) {
